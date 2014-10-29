@@ -1,0 +1,16 @@
+<config>
+  <executableName>corvoid</executableName>
+  <mainClass>corvoid.Corvoid</mainClass>
+  <forceLinkClasses>
+    <pattern>com.android.okhttp.HttpHandler</pattern>
+    <pattern>com.android.okhttp.HttpsHandler</pattern>
+    <pattern>com.android.org.conscrypt.OpenSSLSocketFactoryImpl</pattern>
+    <pattern>com.ctc.wstx.stax.WstxInputFactory</pattern>
+  </forceLinkClasses>
+  <classpath>
+    <classpathentry>target/classes</classpathentry>  
+    <classpathentry>../../.m2/repository/org/codehaus/woodstox/woodstox-core-asl/4.4.1/woodstox-core-asl-4.4.1.jar</classpathentry>
+    <classpathentry>../../.m2/repository/javax/xml/stream/stax-api/1.0-2/stax-api-1.0-2.jar</classpathentry>
+    <classpathentry>../../.m2/repository/org/codehaus/woodstox/stax2-api/3.1.4/stax2-api-3.1.4.jar</classpathentry>
+  </classpath>
+</config>

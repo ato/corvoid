@@ -94,6 +94,12 @@ class PomParser {
 			}
 		}
 		project.parent = parent;
+		if (project.groupId == null) {
+			project.groupId = parent.groupId;
+		}
+		if (project.version == null) {
+			project.version = parent.version;
+		}
 	}
 
 	private void parseProperties() throws XMLStreamException {

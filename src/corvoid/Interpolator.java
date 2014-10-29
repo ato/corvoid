@@ -64,6 +64,9 @@ class Interpolator {
 		case "project.groupId":    return project.groupId;
 		case "project.artifactId": return project.artifactId;
 		case "project.version":    return project.version;
+		case "pom.groupId":    return project.groupId;
+		case "pom.artifactId": return project.artifactId;
+		case "pom.version":    return project.version;
 		}
 		String value = project.properties.get(key);
 		if (value != null) {
