@@ -13,7 +13,12 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
+import javax.xml.stream.XMLInputFactory;
 import javax.xml.stream.XMLStreamException;
+import javax.xml.stream.XMLStreamReader;
+import javax.xml.transform.stream.StreamSource;
+
+import corvoid.pom.Model;
 
 class Cache {
 	ExecutorService threadPool = Executors.newFixedThreadPool(8);
@@ -23,34 +28,30 @@ class Cache {
 		return new File(root, groupId.replace('.', '/'));
 	}
 	
-	private File artifactDir(VersionedCoord coord) {
-		coord.validate();
-		return new File(new File(groupDir(coord.groupId), coord.artifactId), coord.version);
+	private File artifactDir(Coord coord, String version) {
+		return new File(new File(groupDir(coord.groupId), coord.artifactId), version);
 	}
 	
-	public File artifactPath(VersionedCoord coord) {
-		coord.validate();
-		return new File(artifactDir(coord), coord.artifactId + "-" + coord.version + "." + coord.type);
+	public File artifactPath(Coord coord, String version) {
+		return new File(artifactDir(coord, version), coord.artifactId + "-" + version + ".pom");
 	}
 	
-	private File pomPath(VersionedCoord coord) {
-		coord.validate();
-		return new File(artifactDir(coord), coord.artifactId + "-" + coord.version + ".pom");
+	private File pomPath(Coord coord, String version) {
+		return new File(artifactDir(coord, version), coord.artifactId + "-" + version + ".pom");
 	}
-	private URL pomUrl(VersionedCoord coord) {
-		coord.validate();
+	private URL pomUrl(Coord coord, String version) {
 		try {
-			return new URL("http://repo1.maven.org/maven2/" + coord.groupId.replace('.', '/') + "/" + coord.artifactId + "/" + coord.version + "/" + coord.artifactId + "-" + coord.version + ".pom");
+			return new URL("http://repo1.maven.org/maven2/" + coord.groupId.replace('.', '/') + "/" + coord.artifactId + "/" + version + "/" + coord.artifactId + "-" + version + ".pom");
 		} catch (MalformedURLException e) {
 			throw new RuntimeException(e);
 		}
 	}
 	
-	Project readProject(VersionedCoord coord) throws XMLStreamException, IOException {
-		File path = pomPath(coord);
+	Model readProject(Coord coord, String version) throws XMLStreamException, IOException {
+		File path = pomPath(coord, version);
 		if (!path.exists()) {
 			path.getParentFile().mkdirs();
-			URL url = pomUrl(coord);
+			URL url = pomUrl(coord, version);
 			System.out.println("Fetching " + url);
 			try (InputStream in = url.openStream();
 					OutputStream out = new FileOutputStream(path)) {
@@ -62,28 +63,30 @@ class Cache {
 				}
 			}
 		}
-		try (InputStream in = new FileInputStream(pomPath(coord))) {
-			return PomParser.parse(in);
+		try (InputStream in = new FileInputStream(path)) {
+			XMLStreamReader xml = XMLInputFactory.newInstance().createXMLStreamReader(new StreamSource(in));
+			xml.nextTag();
+			return new Model(xml);
 		}
 	}
 
-	Project readAndInheritProject(VersionedCoord coord) throws XMLStreamException, IOException {
-		Project output = readProject(coord);
-		Project project = output;
-		while (project.parent != null) {
-			project = readProject(project.parent);
-			output.inherit(project);
+	Model readAndInheritProject(Coord coord, String version) throws XMLStreamException, IOException {
+		Model output = readProject(coord, version);
+		Model project = output;
+		while (project.getParent() != null && project.getParent().getArtifactId() != null) {
+			project = readProject(new Coord(project.getParent().getGroupId(), project.getParent().getArtifactId()), project.getParent().getVersion());
+			// TODO output.inherit(project);
 		}
 		Interpolator.interpolate(output);
 		return output;
 	}
 	
-	Future<Project> readAsync(final VersionedCoord coord) {
-		return threadPool.submit(new Callable<Project>() {
+	Future<Model> readAsync(final Coord coord, final String version) {
+		return threadPool.submit(new Callable<Model>() {
 
 			@Override
-			public Project call() throws Exception {
-				return readAndInheritProject(coord);
+			public Model call() throws Exception {
+				return readAndInheritProject(coord, version);
 			}
 			 
 		});

@@ -13,6 +13,10 @@ import java.util.concurrent.Future;
 
 import javax.xml.stream.XMLStreamException;
 
+import corvoid.pom.Dependency;
+import corvoid.pom.Exclusion;
+import corvoid.pom.Model;
+
 class DependencyTree {
 	Cache cache = new Cache();
 	Map<Coord,String> versions = new HashMap<>();
@@ -22,34 +26,41 @@ class DependencyTree {
 	class Node {
 		Set<Coord> exclusions;
 		int depth;
-		Project project;
-		Future<Project> future;
+		Model project;
+		Future<Model> future;
 		Dependency source;
 		List<Node> children;
 		
 		void resolve() throws XMLStreamException, IOException {
 			children = new ArrayList<>();
-			for (Dependency dep : project.dependencies) {
-				Coord coord = dep.coord.unversioned();
-				if (!exclusions.contains(coord) && !versions.containsKey(coord) && dep.scope.equals("compile") && !dep.optional) {
-					if (dep.coord.version == null) {
-						Dependency dm = project.dependencyManagement.get(coord);
-						if (dm != null) {
-							dep.coord.version = dm.coord.version;
+			for (Dependency dep : project.getDependencies()) {
+				Coord coord = new Coord(dep.getGroupId(), dep.getArtifactId());
+				if (!exclusions.contains(coord) && 
+						!versions.containsKey(coord) && 
+						(dep.getScope() == null || dep.getScope().equals("compile")) 
+						&& !dep.isOptional()) {
+					String version = dep.getVersion();
+					if (version == null) {
+						// try to find version in DependencyManagement section
+						for (Dependency dm : project.getDependencyManagement().getDependencies()) {
+							if (dm.getArtifactId().equals(dep.getArtifactId()) && dm.getGroupId().equals(dep.getGroupId())) {
+								version = dm.getVersion();
+							}
 						}
 					}
-					if (dep.coord.version == null) {
+					if (version == null) {
 						unconstrained.add(coord);
 					} else {
 						unconstrained.remove(coord);
-						versions.put(coord, dep.coord.version);
+						versions.put(coord, version);
 						Node node = new Node();
 						node.depth = depth + 1;
 						node.exclusions = new HashSet<>(exclusions);
-						node.exclusions.addAll(dep.exclusions);
-						node.future = cache.readAsync(dep.coord);
+						for (Exclusion exclusion : dep.getExclusions()) {
+							node.exclusions.add(new Coord(exclusion.getGroupId(), exclusion.getArtifactId()));
+						}
+						node.future = cache.readAsync(coord, version);
 						node.source = dep;
-					    //node.project = cache.readAndInheritProject(dep.coord);
 						children.add(node);
 					}
 				}
@@ -75,11 +86,11 @@ class DependencyTree {
 			for (int i = 0; i < depth; i++) {
 				out.print("  ");
 			}
-			out.println(project);
+			out.format("%s:%s\n", project.getGroupId(), project.getArtifactId());
 		}
 	}
 
-	public void resolve(Project project) throws XMLStreamException, IOException {
+	public void resolve(Model project) throws XMLStreamException, IOException {
 		try {
 			Node node = new Node();
 			node.depth = 0;
@@ -94,7 +105,8 @@ class DependencyTree {
 	
 	private void buildClasspath(Node node, StringBuilder out) {
 		if (node.source != null) {
-			out.append(cache.artifactPath(node.source.coord));
+			Coord coord = new Coord(node.source.getGroupId(), node.source.getArtifactId());
+			out.append(cache.artifactPath(coord, versions.get(coord)));
 			out.append(":");
 		}
 		for (Node child: node.children) {

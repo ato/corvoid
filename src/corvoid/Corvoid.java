@@ -3,14 +3,19 @@ package corvoid;
 import static java.nio.charset.StandardCharsets.UTF_8;
 
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.Reader;
 import java.io.Writer;
 
+import javax.xml.stream.FactoryConfigurationError;
+import javax.xml.stream.XMLInputFactory;
 import javax.xml.stream.XMLStreamException;
+import javax.xml.stream.XMLStreamReader;
+import javax.xml.transform.stream.StreamSource;
+
+import corvoid.pom.Model;
 
 public class Corvoid {
 	private String defaultPom() throws IOException {
@@ -63,11 +68,17 @@ public class Corvoid {
 	}
 	
 	public DependencyTree tree() throws XMLStreamException, IOException {
-		Project project = PomParser.parse(new FileInputStream("pom.xml"));
+		Model project = parse();
 		Interpolator.interpolate(project);
 		DependencyTree tree = new DependencyTree();
 		tree.resolve(project);
 		return tree;
+	}
+	
+	public Model parse() throws XMLStreamException, FactoryConfigurationError {
+		XMLStreamReader xml = XMLInputFactory.newInstance().createXMLStreamReader(new StreamSource(new File("pom.xml")));
+		xml.nextTag();
+		return new Model(xml);
 	}
 	
 	public void run(String args[]) throws XMLStreamException, IOException {
@@ -75,9 +86,27 @@ public class Corvoid {
 		case "new": newProject(args[1]); break;
 		case "classpath": System.out.println(tree().classpath()); break;
 		case "tree": tree().print(System.out); break;
+		case "compile": compile(); break;
 		}
 	}
-	
+
+	private void compile() throws XMLStreamException, IOException {
+		Model project = parse();
+		Interpolator.interpolate(project);
+		DependencyTree tree = new DependencyTree();
+		tree.resolve(project);
+		String srcDir = project.getBuild().getSourceDirectory();
+		if (srcDir == null) {
+			srcDir = "src";
+		}
+		String outDir = project.getBuild().getOutputDirectory();
+		if (outDir == null) {
+			outDir = "target/classes";
+		}
+		new ProcessBuilder().command("javac", "-sourcepath", srcDir, "-cp", tree.classpath(), "-d", outDir);
+		
+	}
+
 	public static void main(String args[]) throws Exception {
 		new Corvoid().run(args);
 	}
