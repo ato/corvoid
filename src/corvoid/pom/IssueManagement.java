@@ -32,6 +32,17 @@ public class IssueManagement {
         }
     }
 
+    public IssueManagement(IssueManagement issueManagement1, IssueManagement issueManagement2) {
+        system = issueManagement2.system == null ? issueManagement1.system : issueManagement2.system;
+        url = issueManagement2.url == null ? issueManagement1.url : issueManagement2.url;
+    }
+
+    public void transform(Transformer transformer) {
+        system = transformer.transform(system);
+        url = transformer.transform(url);
+    }
+
+
     public String getSystem() {
         return system;
     }

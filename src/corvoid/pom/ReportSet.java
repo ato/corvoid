@@ -9,7 +9,7 @@ import javax.xml.stream.XMLStreamReader;
 import static javax.xml.stream.XMLStreamReader.START_ELEMENT;
 
 public class ReportSet {
-    private String id = "default";
+    private String id;
     private Map<String,String> configuration = new HashMap<>();
     private String inherited;
     private List<String> reports = new ArrayList<>();
@@ -53,6 +53,27 @@ public class ReportSet {
             }
         }
     }
+
+    public ReportSet(ReportSet reportSet1, ReportSet reportSet2) {
+        id = reportSet2.id == null ? reportSet1.id : reportSet2.id;
+        configuration.putAll(reportSet1.configuration);
+        configuration.putAll(reportSet2.configuration);
+        inherited = reportSet2.inherited == null ? reportSet1.inherited : reportSet2.inherited;
+        reports.addAll(reportSet1.reports);
+        reports.addAll(reportSet2.reports);
+    }
+
+    public void transform(Transformer transformer) {
+        id = transformer.transform(id);
+        for (String key: configuration.keySet()) {
+            configuration.put(key, transformer.transform(configuration.get(key)));
+        }
+        inherited = transformer.transform(inherited);
+        for (int i = 0; i < reports.size(); i++) {
+            reports.set(i, transformer.transform(reports.get(i)));
+        }
+    }
+
 
     public String getId() {
         return id;

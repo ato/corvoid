@@ -33,6 +33,18 @@ public class DependencyManagement {
         }
     }
 
+    public DependencyManagement(DependencyManagement dependencyManagement1, DependencyManagement dependencyManagement2) {
+        dependencies.addAll(dependencyManagement1.dependencies);
+        dependencies.addAll(dependencyManagement2.dependencies);
+    }
+
+    public void transform(Transformer transformer) {
+        for (int i = 0; i < dependencies.size(); i++) {
+            dependencies.get(i).transform(transformer);
+        }
+    }
+
+
     public List<Dependency> getDependencies() {
         return dependencies;
     }

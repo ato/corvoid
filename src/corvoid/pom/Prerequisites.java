@@ -9,7 +9,7 @@ import javax.xml.stream.XMLStreamReader;
 import static javax.xml.stream.XMLStreamReader.START_ELEMENT;
 
 public class Prerequisites {
-    private String maven = "2.0";
+    private String maven;
 
     public Prerequisites() {}
 
@@ -26,6 +26,15 @@ public class Prerequisites {
             }
         }
     }
+
+    public Prerequisites(Prerequisites prerequisites1, Prerequisites prerequisites2) {
+        maven = prerequisites2.maven == null ? prerequisites1.maven : prerequisites2.maven;
+    }
+
+    public void transform(Transformer transformer) {
+        maven = transformer.transform(maven);
+    }
+
 
     public String getMaven() {
         return maven;

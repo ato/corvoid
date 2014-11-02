@@ -33,6 +33,18 @@ public class PluginManagement {
         }
     }
 
+    public PluginManagement(PluginManagement pluginManagement1, PluginManagement pluginManagement2) {
+        plugins.addAll(pluginManagement1.plugins);
+        plugins.addAll(pluginManagement2.plugins);
+    }
+
+    public void transform(Transformer transformer) {
+        for (int i = 0; i < plugins.size(); i++) {
+            plugins.get(i).transform(transformer);
+        }
+    }
+
+
     public List<Plugin> getPlugins() {
         return plugins;
     }

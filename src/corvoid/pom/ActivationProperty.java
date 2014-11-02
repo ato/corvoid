@@ -32,6 +32,17 @@ public class ActivationProperty {
         }
     }
 
+    public ActivationProperty(ActivationProperty activationProperty1, ActivationProperty activationProperty2) {
+        name = activationProperty2.name == null ? activationProperty1.name : activationProperty2.name;
+        value = activationProperty2.value == null ? activationProperty1.value : activationProperty2.value;
+    }
+
+    public void transform(Transformer transformer) {
+        name = transformer.transform(name);
+        value = transformer.transform(value);
+    }
+
+
     public String getName() {
         return name;
     }

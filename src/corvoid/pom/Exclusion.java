@@ -32,6 +32,17 @@ public class Exclusion {
         }
     }
 
+    public Exclusion(Exclusion exclusion1, Exclusion exclusion2) {
+        artifactId = exclusion2.artifactId == null ? exclusion1.artifactId : exclusion2.artifactId;
+        groupId = exclusion2.groupId == null ? exclusion1.groupId : exclusion2.groupId;
+    }
+
+    public void transform(Transformer transformer) {
+        artifactId = transformer.transform(artifactId);
+        groupId = transformer.transform(groupId);
+    }
+
+
     public String getArtifactId() {
         return artifactId;
     }

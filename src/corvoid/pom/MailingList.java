@@ -58,6 +58,28 @@ public class MailingList {
         }
     }
 
+    public MailingList(MailingList mailingList1, MailingList mailingList2) {
+        name = mailingList2.name == null ? mailingList1.name : mailingList2.name;
+        subscribe = mailingList2.subscribe == null ? mailingList1.subscribe : mailingList2.subscribe;
+        unsubscribe = mailingList2.unsubscribe == null ? mailingList1.unsubscribe : mailingList2.unsubscribe;
+        post = mailingList2.post == null ? mailingList1.post : mailingList2.post;
+        archive = mailingList2.archive == null ? mailingList1.archive : mailingList2.archive;
+        otherArchives.addAll(mailingList1.otherArchives);
+        otherArchives.addAll(mailingList2.otherArchives);
+    }
+
+    public void transform(Transformer transformer) {
+        name = transformer.transform(name);
+        subscribe = transformer.transform(subscribe);
+        unsubscribe = transformer.transform(unsubscribe);
+        post = transformer.transform(post);
+        archive = transformer.transform(archive);
+        for (int i = 0; i < otherArchives.size(); i++) {
+            otherArchives.set(i, transformer.transform(otherArchives.get(i)));
+        }
+    }
+
+
     public String getName() {
         return name;
     }

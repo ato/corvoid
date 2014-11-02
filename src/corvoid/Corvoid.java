@@ -3,11 +3,19 @@ package corvoid;
 import static java.nio.charset.StandardCharsets.UTF_8;
 
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.Reader;
 import java.io.Writer;
+import java.lang.ProcessBuilder.Redirect;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.LinkedList;
+import java.util.List;
 
 import javax.xml.stream.FactoryConfigurationError;
 import javax.xml.stream.XMLInputFactory;
@@ -18,8 +26,8 @@ import javax.xml.transform.stream.StreamSource;
 import corvoid.pom.Model;
 
 public class Corvoid {
-	private String defaultPom() throws IOException {
-		try (Reader r = new InputStreamReader(Corvoid.class.getResourceAsStream("default.pom"), UTF_8)) {			
+	private String skeletonPom() throws IOException {
+		try (Reader r = new InputStreamReader(Corvoid.class.getResourceAsStream("skeleton.pom"), UTF_8)) {			
 			StringBuilder sb = new StringBuilder();
 			char[] b = new char[8192];
 			for (int nread = r.read(b); nread >= 0; nread = r.read(b)) {
@@ -27,6 +35,24 @@ public class Corvoid {
 			}
 			return sb.toString();
 		}
+	}
+	
+	private static Model superPom;
+	
+	private Model superPom() {
+		if (superPom == null) {
+			try (InputStream in = Corvoid.class
+					.getResourceAsStream("super.pom")) {
+				XMLStreamReader xml = XMLInputFactory.newInstance()
+						.createXMLStreamReader(new StreamSource(in));
+				xml.nextTag();
+				superPom = new Model(xml);
+			} catch (XMLStreamException | FactoryConfigurationError
+					| IOException e) {
+				throw new RuntimeException(e);
+			}
+		}
+		return superPom;
 	}
 	
 	private String javaMinorVersion() {
@@ -55,7 +81,7 @@ public class Corvoid {
 		
 		File pom = new File(projectDir, "pom.xml");
 		try (Writer w = new FileWriter(pom)) {
-			w.write(defaultPom()
+			w.write(skeletonPom()
 					.replace("$[name]", name)
 					.replace("$[java.version]", javaMinorVersion()));
 		}
@@ -75,40 +101,118 @@ public class Corvoid {
 		return tree;
 	}
 	
-	public Model parse() throws XMLStreamException, FactoryConfigurationError {
-		XMLStreamReader xml = XMLInputFactory.newInstance().createXMLStreamReader(new StreamSource(new File("pom.xml")));
+	public Model parse() throws XMLStreamException, FactoryConfigurationError, FileNotFoundException {
+		XMLStreamReader xml = XMLInputFactory.newInstance().createXMLStreamReader(new StreamSource(new FileInputStream("pom.xml")));
 		xml.nextTag();
 		return new Model(xml);
 	}
 	
-	public void run(String args[]) throws XMLStreamException, IOException {
+	public void command(String args[]) throws XMLStreamException, IOException {
 		switch (args[0]) {
 		case "new": newProject(args[1]); break;
 		case "classpath": System.out.println(tree().classpath()); break;
 		case "tree": tree().print(System.out); break;
 		case "compile": compile(); break;
+		case "run": run(args); break;
 		}
 	}
 
+	private void run(String[] args) throws XMLStreamException, IOException {
+		DependencyTree tree = tree();
+		String classpath = tree.classpath();
+		List<String> command = new ArrayList<>();
+		command.add("java");
+		command.add("-cp");
+		command.add("target/classes:" + classpath);
+		command.addAll(Arrays.asList(args).subList(1, args.length));
+		try {
+			new ProcessBuilder().command(command)
+			.redirectError(Redirect.INHERIT)
+			.redirectOutput(Redirect.INHERIT)
+			.redirectInput(Redirect.INHERIT)
+			.start().waitFor();
+		} catch (InterruptedException e) {
+			throw new RuntimeException(e);
+		}
+	}
+
+	private static class CompilerOptions {
+		File srcDir, outDir;
+		String classpath;
+		boolean verbose = true;
+		
+		List<File> walkSources(File srcDir) {
+			List<File> list = new ArrayList<>();
+			LinkedList<File> queue = new LinkedList<>();
+			queue.add(srcDir.getAbsoluteFile());
+			while (!queue.isEmpty()) {
+				File dir = queue.remove();
+				for (File file : dir.listFiles()) {
+					if (file.isDirectory()) {
+						queue.add(file.getAbsoluteFile());
+					} else if (file.toString().endsWith(".java")) {
+						list.add(file);
+					}
+				}
+			}
+			return list;
+		}
+		
+		
+		List<String> buildCommandLine() {
+			List<String> cmd = new ArrayList<>();
+			cmd.add("javac");
+			if (verbose) {
+				cmd.add("-verbose");
+			}
+			cmd.add("-sourcepath");
+			cmd.add(srcDir.toString());
+			cmd.add("-cp");
+			cmd.add(classpath);
+			cmd.add("-d");
+			cmd.add(outDir.toString());
+			for (File f : walkSources(srcDir)) {
+				cmd.add(f.toString());
+			}
+			return cmd;
+		}
+	}
+	
 	private void compile() throws XMLStreamException, IOException {
-		Model project = parse();
+		Model project = new Model(superPom(), parse());
 		Interpolator.interpolate(project);
 		DependencyTree tree = new DependencyTree();
 		tree.resolve(project);
-		String srcDir = project.getBuild().getSourceDirectory();
-		if (srcDir == null) {
-			srcDir = "src";
+		CompilerOptions options = new CompilerOptions();
+		options.classpath = tree.classpath();
+		options.srcDir = new File(project.getBuild().getSourceDirectory());
+		if (options.srcDir == null) {
+			options.srcDir = new File("src");
 		}
-		String outDir = project.getBuild().getOutputDirectory();
-		if (outDir == null) {
-			outDir = "target/classes";
+		options.outDir = new File(project.getBuild().getOutputDirectory());
+		if (options.outDir == null) {
+			options.outDir = new File("target/classes");
 		}
-		new ProcessBuilder().command("javac", "-sourcepath", srcDir, "-cp", tree.classpath(), "-d", outDir);
+		List<String> cmd = options.buildCommandLine();
+		for (String s : cmd) {
+			System.out.print(s);
+			System.out.print(" ");
+		}
+		System.out.println();
+		try {
+			new ProcessBuilder().command(cmd)
+			.redirectError(Redirect.INHERIT)
+			.redirectOutput(Redirect.INHERIT)
+			.start().waitFor();
+		} catch (InterruptedException e) {
+			throw new RuntimeException(e);
+		}
 		
 	}
+	
 
 	public static void main(String args[]) throws Exception {
-		new Corvoid().run(args);
+		new Corvoid().command(args);
 	}
 
 }

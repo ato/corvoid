@@ -11,7 +11,7 @@ import static javax.xml.stream.XMLStreamReader.START_ELEMENT;
 public class Scm {
     private String connection;
     private String developerConnection;
-    private String tag = "HEAD";
+    private String tag;
     private String url;
 
     public Scm() {}
@@ -41,6 +41,21 @@ public class Scm {
             }
         }
     }
+
+    public Scm(Scm scm1, Scm scm2) {
+        connection = scm2.connection == null ? scm1.connection : scm2.connection;
+        developerConnection = scm2.developerConnection == null ? scm1.developerConnection : scm2.developerConnection;
+        tag = scm2.tag == null ? scm1.tag : scm2.tag;
+        url = scm2.url == null ? scm1.url : scm2.url;
+    }
+
+    public void transform(Transformer transformer) {
+        connection = transformer.transform(connection);
+        developerConnection = transformer.transform(developerConnection);
+        tag = transformer.transform(tag);
+        url = transformer.transform(url);
+    }
+
 
     public String getConnection() {
         return connection;

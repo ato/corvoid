@@ -122,6 +122,56 @@ public class Build {
         }
     }
 
+    public Build(Build build1, Build build2) {
+        sourceDirectory = build2.sourceDirectory == null ? build1.sourceDirectory : build2.sourceDirectory;
+        scriptSourceDirectory = build2.scriptSourceDirectory == null ? build1.scriptSourceDirectory : build2.scriptSourceDirectory;
+        testSourceDirectory = build2.testSourceDirectory == null ? build1.testSourceDirectory : build2.testSourceDirectory;
+        outputDirectory = build2.outputDirectory == null ? build1.outputDirectory : build2.outputDirectory;
+        testOutputDirectory = build2.testOutputDirectory == null ? build1.testOutputDirectory : build2.testOutputDirectory;
+        extensions.addAll(build1.extensions);
+        extensions.addAll(build2.extensions);
+        defaultGoal = build2.defaultGoal == null ? build1.defaultGoal : build2.defaultGoal;
+        resources.addAll(build1.resources);
+        resources.addAll(build2.resources);
+        testResources.addAll(build1.testResources);
+        testResources.addAll(build2.testResources);
+        directory = build2.directory == null ? build1.directory : build2.directory;
+        finalName = build2.finalName == null ? build1.finalName : build2.finalName;
+        filters.addAll(build1.filters);
+        filters.addAll(build2.filters);
+        pluginManagement = new PluginManagement(build1.pluginManagement, build2.pluginManagement);
+        plugins.addAll(build1.plugins);
+        plugins.addAll(build2.plugins);
+    }
+
+    public void transform(Transformer transformer) {
+        sourceDirectory = transformer.transform(sourceDirectory);
+        scriptSourceDirectory = transformer.transform(scriptSourceDirectory);
+        testSourceDirectory = transformer.transform(testSourceDirectory);
+        outputDirectory = transformer.transform(outputDirectory);
+        testOutputDirectory = transformer.transform(testOutputDirectory);
+        for (int i = 0; i < extensions.size(); i++) {
+            extensions.get(i).transform(transformer);
+        }
+        defaultGoal = transformer.transform(defaultGoal);
+        for (int i = 0; i < resources.size(); i++) {
+            resources.get(i).transform(transformer);
+        }
+        for (int i = 0; i < testResources.size(); i++) {
+            testResources.get(i).transform(transformer);
+        }
+        directory = transformer.transform(directory);
+        finalName = transformer.transform(finalName);
+        for (int i = 0; i < filters.size(); i++) {
+            filters.set(i, transformer.transform(filters.get(i)));
+        }
+        pluginManagement.transform(transformer);
+        for (int i = 0; i < plugins.size(); i++) {
+            plugins.get(i).transform(transformer);
+        }
+    }
+
+
     public String getSourceDirectory() {
         return sourceDirectory;
     }

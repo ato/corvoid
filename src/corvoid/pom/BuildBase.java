@@ -86,6 +86,41 @@ public class BuildBase {
         }
     }
 
+    public BuildBase(BuildBase buildBase1, BuildBase buildBase2) {
+        defaultGoal = buildBase2.defaultGoal == null ? buildBase1.defaultGoal : buildBase2.defaultGoal;
+        resources.addAll(buildBase1.resources);
+        resources.addAll(buildBase2.resources);
+        testResources.addAll(buildBase1.testResources);
+        testResources.addAll(buildBase2.testResources);
+        directory = buildBase2.directory == null ? buildBase1.directory : buildBase2.directory;
+        finalName = buildBase2.finalName == null ? buildBase1.finalName : buildBase2.finalName;
+        filters.addAll(buildBase1.filters);
+        filters.addAll(buildBase2.filters);
+        pluginManagement = new PluginManagement(buildBase1.pluginManagement, buildBase2.pluginManagement);
+        plugins.addAll(buildBase1.plugins);
+        plugins.addAll(buildBase2.plugins);
+    }
+
+    public void transform(Transformer transformer) {
+        defaultGoal = transformer.transform(defaultGoal);
+        for (int i = 0; i < resources.size(); i++) {
+            resources.get(i).transform(transformer);
+        }
+        for (int i = 0; i < testResources.size(); i++) {
+            testResources.get(i).transform(transformer);
+        }
+        directory = transformer.transform(directory);
+        finalName = transformer.transform(finalName);
+        for (int i = 0; i < filters.size(); i++) {
+            filters.set(i, transformer.transform(filters.get(i)));
+        }
+        pluginManagement.transform(transformer);
+        for (int i = 0; i < plugins.size(); i++) {
+            plugins.get(i).transform(transformer);
+        }
+    }
+
+
     public String getDefaultGoal() {
         return defaultGoal;
     }

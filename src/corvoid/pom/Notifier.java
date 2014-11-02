@@ -9,11 +9,11 @@ import javax.xml.stream.XMLStreamReader;
 import static javax.xml.stream.XMLStreamReader.START_ELEMENT;
 
 public class Notifier {
-    private String type = "mail";
-    private boolean sendOnError = true;
-    private boolean sendOnFailure = true;
-    private boolean sendOnSuccess = true;
-    private boolean sendOnWarning = true;
+    private String type;
+    private Boolean sendOnError;
+    private Boolean sendOnFailure;
+    private Boolean sendOnSuccess;
+    private Boolean sendOnWarning;
     private String address;
     private Map<String,String> configuration = new HashMap<>();
 
@@ -63,23 +63,43 @@ public class Notifier {
         }
     }
 
+    public Notifier(Notifier notifier1, Notifier notifier2) {
+        type = notifier2.type == null ? notifier1.type : notifier2.type;
+        sendOnError = notifier2.sendOnError == null ? notifier1.sendOnError : notifier2.sendOnError;
+        sendOnFailure = notifier2.sendOnFailure == null ? notifier1.sendOnFailure : notifier2.sendOnFailure;
+        sendOnSuccess = notifier2.sendOnSuccess == null ? notifier1.sendOnSuccess : notifier2.sendOnSuccess;
+        sendOnWarning = notifier2.sendOnWarning == null ? notifier1.sendOnWarning : notifier2.sendOnWarning;
+        address = notifier2.address == null ? notifier1.address : notifier2.address;
+        configuration.putAll(notifier1.configuration);
+        configuration.putAll(notifier2.configuration);
+    }
+
+    public void transform(Transformer transformer) {
+        type = transformer.transform(type);
+        address = transformer.transform(address);
+        for (String key: configuration.keySet()) {
+            configuration.put(key, transformer.transform(configuration.get(key)));
+        }
+    }
+
+
     public String getType() {
         return type;
     }
 
-    public boolean isSendOnError() {
+    public Boolean getSendOnError() {
         return sendOnError;
     }
 
-    public boolean isSendOnFailure() {
+    public Boolean getSendOnFailure() {
         return sendOnFailure;
     }
 
-    public boolean isSendOnSuccess() {
+    public Boolean getSendOnSuccess() {
         return sendOnSuccess;
     }
 
-    public boolean isSendOnWarning() {
+    public Boolean getSendOnWarning() {
         return sendOnWarning;
     }
 

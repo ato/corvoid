@@ -9,7 +9,7 @@ import javax.xml.stream.XMLStreamReader;
 import static javax.xml.stream.XMLStreamReader.START_ELEMENT;
 
 public class PluginExecution {
-    private String id = "default";
+    private String id;
     private String phase;
     private List<String> goals = new ArrayList<>();
     private String inherited;
@@ -58,6 +58,29 @@ public class PluginExecution {
             }
         }
     }
+
+    public PluginExecution(PluginExecution pluginExecution1, PluginExecution pluginExecution2) {
+        id = pluginExecution2.id == null ? pluginExecution1.id : pluginExecution2.id;
+        phase = pluginExecution2.phase == null ? pluginExecution1.phase : pluginExecution2.phase;
+        goals.addAll(pluginExecution1.goals);
+        goals.addAll(pluginExecution2.goals);
+        inherited = pluginExecution2.inherited == null ? pluginExecution1.inherited : pluginExecution2.inherited;
+        configuration.putAll(pluginExecution1.configuration);
+        configuration.putAll(pluginExecution2.configuration);
+    }
+
+    public void transform(Transformer transformer) {
+        id = transformer.transform(id);
+        phase = transformer.transform(phase);
+        for (int i = 0; i < goals.size(); i++) {
+            goals.set(i, transformer.transform(goals.get(i)));
+        }
+        inherited = transformer.transform(inherited);
+        for (String key: configuration.keySet()) {
+            configuration.put(key, transformer.transform(configuration.get(key)));
+        }
+    }
+
 
     public String getId() {
         return id;

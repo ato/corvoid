@@ -13,7 +13,7 @@ public class Model {
     private String modelVersion;
     private String groupId;
     private String artifactId;
-    private String packaging = "jar";
+    private String packaging;
     private String name;
     private String version;
     private String description;
@@ -233,6 +233,106 @@ public class Model {
             }
         }
     }
+
+    public Model(Model model1, Model model2) {
+        parent = new Parent(model1.parent, model2.parent);
+        modelVersion = model2.modelVersion == null ? model1.modelVersion : model2.modelVersion;
+        groupId = model2.groupId == null ? model1.groupId : model2.groupId;
+        artifactId = model2.artifactId == null ? model1.artifactId : model2.artifactId;
+        packaging = model2.packaging == null ? model1.packaging : model2.packaging;
+        name = model2.name == null ? model1.name : model2.name;
+        version = model2.version == null ? model1.version : model2.version;
+        description = model2.description == null ? model1.description : model2.description;
+        url = model2.url == null ? model1.url : model2.url;
+        prerequisites = new Prerequisites(model1.prerequisites, model2.prerequisites);
+        issueManagement = new IssueManagement(model1.issueManagement, model2.issueManagement);
+        ciManagement = new CiManagement(model1.ciManagement, model2.ciManagement);
+        inceptionYear = model2.inceptionYear == null ? model1.inceptionYear : model2.inceptionYear;
+        mailingLists.addAll(model1.mailingLists);
+        mailingLists.addAll(model2.mailingLists);
+        developers.addAll(model1.developers);
+        developers.addAll(model2.developers);
+        contributors.addAll(model1.contributors);
+        contributors.addAll(model2.contributors);
+        licenses.addAll(model1.licenses);
+        licenses.addAll(model2.licenses);
+        scm = new Scm(model1.scm, model2.scm);
+        organization = new Organization(model1.organization, model2.organization);
+        build = new Build(model1.build, model2.build);
+        profiles.addAll(model1.profiles);
+        profiles.addAll(model2.profiles);
+        modules.addAll(model1.modules);
+        modules.addAll(model2.modules);
+        repositories.addAll(model1.repositories);
+        repositories.addAll(model2.repositories);
+        pluginRepositories.addAll(model1.pluginRepositories);
+        pluginRepositories.addAll(model2.pluginRepositories);
+        dependencies.addAll(model1.dependencies);
+        dependencies.addAll(model2.dependencies);
+        reports.putAll(model1.reports);
+        reports.putAll(model2.reports);
+        reporting = new Reporting(model1.reporting, model2.reporting);
+        dependencyManagement = new DependencyManagement(model1.dependencyManagement, model2.dependencyManagement);
+        distributionManagement = new DistributionManagement(model1.distributionManagement, model2.distributionManagement);
+        properties.putAll(model1.properties);
+        properties.putAll(model2.properties);
+    }
+
+    public void transform(Transformer transformer) {
+        parent.transform(transformer);
+        modelVersion = transformer.transform(modelVersion);
+        groupId = transformer.transform(groupId);
+        artifactId = transformer.transform(artifactId);
+        packaging = transformer.transform(packaging);
+        name = transformer.transform(name);
+        version = transformer.transform(version);
+        description = transformer.transform(description);
+        url = transformer.transform(url);
+        prerequisites.transform(transformer);
+        issueManagement.transform(transformer);
+        ciManagement.transform(transformer);
+        inceptionYear = transformer.transform(inceptionYear);
+        for (int i = 0; i < mailingLists.size(); i++) {
+            mailingLists.get(i).transform(transformer);
+        }
+        for (int i = 0; i < developers.size(); i++) {
+            developers.get(i).transform(transformer);
+        }
+        for (int i = 0; i < contributors.size(); i++) {
+            contributors.get(i).transform(transformer);
+        }
+        for (int i = 0; i < licenses.size(); i++) {
+            licenses.get(i).transform(transformer);
+        }
+        scm.transform(transformer);
+        organization.transform(transformer);
+        build.transform(transformer);
+        for (int i = 0; i < profiles.size(); i++) {
+            profiles.get(i).transform(transformer);
+        }
+        for (int i = 0; i < modules.size(); i++) {
+            modules.set(i, transformer.transform(modules.get(i)));
+        }
+        for (int i = 0; i < repositories.size(); i++) {
+            repositories.get(i).transform(transformer);
+        }
+        for (int i = 0; i < pluginRepositories.size(); i++) {
+            pluginRepositories.get(i).transform(transformer);
+        }
+        for (int i = 0; i < dependencies.size(); i++) {
+            dependencies.get(i).transform(transformer);
+        }
+        for (String key: reports.keySet()) {
+            reports.put(key, transformer.transform(reports.get(key)));
+        }
+        reporting.transform(transformer);
+        dependencyManagement.transform(transformer);
+        distributionManagement.transform(transformer);
+        for (String key: properties.keySet()) {
+            properties.put(key, transformer.transform(properties.get(key)));
+        }
+    }
+
 
     public Parent getParent() {
         return parent;

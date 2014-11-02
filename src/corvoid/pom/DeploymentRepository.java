@@ -9,11 +9,11 @@ import javax.xml.stream.XMLStreamReader;
 import static javax.xml.stream.XMLStreamReader.START_ELEMENT;
 
 public class DeploymentRepository {
-    private boolean uniqueVersion = true;
+    private Boolean uniqueVersion;
     private String id;
     private String name;
     private String url;
-    private String layout = "default";
+    private String layout;
 
     public DeploymentRepository() {}
 
@@ -47,7 +47,23 @@ public class DeploymentRepository {
         }
     }
 
-    public boolean isUniqueVersion() {
+    public DeploymentRepository(DeploymentRepository deploymentRepository1, DeploymentRepository deploymentRepository2) {
+        uniqueVersion = deploymentRepository2.uniqueVersion == null ? deploymentRepository1.uniqueVersion : deploymentRepository2.uniqueVersion;
+        id = deploymentRepository2.id == null ? deploymentRepository1.id : deploymentRepository2.id;
+        name = deploymentRepository2.name == null ? deploymentRepository1.name : deploymentRepository2.name;
+        url = deploymentRepository2.url == null ? deploymentRepository1.url : deploymentRepository2.url;
+        layout = deploymentRepository2.layout == null ? deploymentRepository1.layout : deploymentRepository2.layout;
+    }
+
+    public void transform(Transformer transformer) {
+        id = transformer.transform(id);
+        name = transformer.transform(name);
+        url = transformer.transform(url);
+        layout = transformer.transform(layout);
+    }
+
+
+    public Boolean getUniqueVersion() {
         return uniqueVersion;
     }
 

@@ -42,6 +42,21 @@ public class ActivationOS {
         }
     }
 
+    public ActivationOS(ActivationOS activationOS1, ActivationOS activationOS2) {
+        name = activationOS2.name == null ? activationOS1.name : activationOS2.name;
+        family = activationOS2.family == null ? activationOS1.family : activationOS2.family;
+        arch = activationOS2.arch == null ? activationOS1.arch : activationOS2.arch;
+        version = activationOS2.version == null ? activationOS1.version : activationOS2.version;
+    }
+
+    public void transform(Transformer transformer) {
+        name = transformer.transform(name);
+        family = transformer.transform(family);
+        arch = transformer.transform(arch);
+        version = transformer.transform(version);
+    }
+
+
     public String getName() {
         return name;
     }

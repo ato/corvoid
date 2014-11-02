@@ -114,6 +114,55 @@ public class Profile {
         }
     }
 
+    public Profile(Profile profile1, Profile profile2) {
+        id = profile2.id == null ? profile1.id : profile2.id;
+        activation = new Activation(profile1.activation, profile2.activation);
+        build = new BuildBase(profile1.build, profile2.build);
+        modules.addAll(profile1.modules);
+        modules.addAll(profile2.modules);
+        repositories.addAll(profile1.repositories);
+        repositories.addAll(profile2.repositories);
+        pluginRepositories.addAll(profile1.pluginRepositories);
+        pluginRepositories.addAll(profile2.pluginRepositories);
+        dependencies.addAll(profile1.dependencies);
+        dependencies.addAll(profile2.dependencies);
+        reports.putAll(profile1.reports);
+        reports.putAll(profile2.reports);
+        reporting = new Reporting(profile1.reporting, profile2.reporting);
+        dependencyManagement = new DependencyManagement(profile1.dependencyManagement, profile2.dependencyManagement);
+        distributionManagement = new DistributionManagement(profile1.distributionManagement, profile2.distributionManagement);
+        properties.putAll(profile1.properties);
+        properties.putAll(profile2.properties);
+    }
+
+    public void transform(Transformer transformer) {
+        id = transformer.transform(id);
+        activation.transform(transformer);
+        build.transform(transformer);
+        for (int i = 0; i < modules.size(); i++) {
+            modules.set(i, transformer.transform(modules.get(i)));
+        }
+        for (int i = 0; i < repositories.size(); i++) {
+            repositories.get(i).transform(transformer);
+        }
+        for (int i = 0; i < pluginRepositories.size(); i++) {
+            pluginRepositories.get(i).transform(transformer);
+        }
+        for (int i = 0; i < dependencies.size(); i++) {
+            dependencies.get(i).transform(transformer);
+        }
+        for (String key: reports.keySet()) {
+            reports.put(key, transformer.transform(reports.get(key)));
+        }
+        reporting.transform(transformer);
+        dependencyManagement.transform(transformer);
+        distributionManagement.transform(transformer);
+        for (String key: properties.keySet()) {
+            properties.put(key, transformer.transform(properties.get(key)));
+        }
+    }
+
+
     public String getId() {
         return id;
     }

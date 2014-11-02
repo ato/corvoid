@@ -42,6 +42,21 @@ public class License {
         }
     }
 
+    public License(License license1, License license2) {
+        name = license2.name == null ? license1.name : license2.name;
+        url = license2.url == null ? license1.url : license2.url;
+        distribution = license2.distribution == null ? license1.distribution : license2.distribution;
+        comments = license2.comments == null ? license1.comments : license2.comments;
+    }
+
+    public void transform(Transformer transformer) {
+        name = transformer.transform(name);
+        url = transformer.transform(url);
+        distribution = transformer.transform(distribution);
+        comments = transformer.transform(comments);
+    }
+
+
     public String getName() {
         return name;
     }

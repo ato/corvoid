@@ -9,7 +9,7 @@ import javax.xml.stream.XMLStreamReader;
 import static javax.xml.stream.XMLStreamReader.START_ELEMENT;
 
 public class Reporting {
-    private boolean excludeDefaults = false;
+    private Boolean excludeDefaults;
     private String outputDirectory;
     private List<ReportPlugin> plugins = new ArrayList<>();
 
@@ -43,7 +43,22 @@ public class Reporting {
         }
     }
 
-    public boolean isExcludeDefaults() {
+    public Reporting(Reporting reporting1, Reporting reporting2) {
+        excludeDefaults = reporting2.excludeDefaults == null ? reporting1.excludeDefaults : reporting2.excludeDefaults;
+        outputDirectory = reporting2.outputDirectory == null ? reporting1.outputDirectory : reporting2.outputDirectory;
+        plugins.addAll(reporting1.plugins);
+        plugins.addAll(reporting2.plugins);
+    }
+
+    public void transform(Transformer transformer) {
+        outputDirectory = transformer.transform(outputDirectory);
+        for (int i = 0; i < plugins.size(); i++) {
+            plugins.get(i).transform(transformer);
+        }
+    }
+
+
+    public Boolean getExcludeDefaults() {
         return excludeDefaults;
     }
 

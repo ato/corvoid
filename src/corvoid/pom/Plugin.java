@@ -9,10 +9,10 @@ import javax.xml.stream.XMLStreamReader;
 import static javax.xml.stream.XMLStreamReader.START_ELEMENT;
 
 public class Plugin {
-    private String groupId = "org.apache.maven.plugins";
+    private String groupId;
     private String artifactId;
     private String version;
-    private boolean extensions = false;
+    private Boolean extensions;
     private List<PluginExecution> executions = new ArrayList<>();
     private List<Dependency> dependencies = new ArrayList<>();
     private Map<String,String> goals = new HashMap<>();
@@ -91,6 +91,42 @@ public class Plugin {
         }
     }
 
+    public Plugin(Plugin plugin1, Plugin plugin2) {
+        groupId = plugin2.groupId == null ? plugin1.groupId : plugin2.groupId;
+        artifactId = plugin2.artifactId == null ? plugin1.artifactId : plugin2.artifactId;
+        version = plugin2.version == null ? plugin1.version : plugin2.version;
+        extensions = plugin2.extensions == null ? plugin1.extensions : plugin2.extensions;
+        executions.addAll(plugin1.executions);
+        executions.addAll(plugin2.executions);
+        dependencies.addAll(plugin1.dependencies);
+        dependencies.addAll(plugin2.dependencies);
+        goals.putAll(plugin1.goals);
+        goals.putAll(plugin2.goals);
+        inherited = plugin2.inherited == null ? plugin1.inherited : plugin2.inherited;
+        configuration.putAll(plugin1.configuration);
+        configuration.putAll(plugin2.configuration);
+    }
+
+    public void transform(Transformer transformer) {
+        groupId = transformer.transform(groupId);
+        artifactId = transformer.transform(artifactId);
+        version = transformer.transform(version);
+        for (int i = 0; i < executions.size(); i++) {
+            executions.get(i).transform(transformer);
+        }
+        for (int i = 0; i < dependencies.size(); i++) {
+            dependencies.get(i).transform(transformer);
+        }
+        for (String key: goals.keySet()) {
+            goals.put(key, transformer.transform(goals.get(key)));
+        }
+        inherited = transformer.transform(inherited);
+        for (String key: configuration.keySet()) {
+            configuration.put(key, transformer.transform(configuration.get(key)));
+        }
+    }
+
+
     public String getGroupId() {
         return groupId;
     }
@@ -103,7 +139,7 @@ public class Plugin {
         return version;
     }
 
-    public boolean isExtensions() {
+    public Boolean getExtensions() {
         return extensions;
     }
 

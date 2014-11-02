@@ -32,6 +32,17 @@ public class Organization {
         }
     }
 
+    public Organization(Organization organization1, Organization organization2) {
+        name = organization2.name == null ? organization1.name : organization2.name;
+        url = organization2.url == null ? organization1.url : organization2.url;
+    }
+
+    public void transform(Transformer transformer) {
+        name = transformer.transform(name);
+        url = transformer.transform(url);
+    }
+
+
     public String getName() {
         return name;
     }

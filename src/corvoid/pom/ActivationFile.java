@@ -32,6 +32,17 @@ public class ActivationFile {
         }
     }
 
+    public ActivationFile(ActivationFile activationFile1, ActivationFile activationFile2) {
+        missing = activationFile2.missing == null ? activationFile1.missing : activationFile2.missing;
+        exists = activationFile2.exists == null ? activationFile1.exists : activationFile2.exists;
+    }
+
+    public void transform(Transformer transformer) {
+        missing = transformer.transform(missing);
+        exists = transformer.transform(exists);
+    }
+
+
     public String getMissing() {
         return missing;
     }

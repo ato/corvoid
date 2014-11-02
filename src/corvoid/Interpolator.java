@@ -1,15 +1,9 @@
 package corvoid;
 
-import java.lang.reflect.Field;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-
 import corvoid.pom.Model;
+import corvoid.pom.Transformer;
 
-class Interpolator {
+class Interpolator implements Transformer {
 	private Model project;
 
 	private Interpolator(Model project) {
@@ -17,99 +11,65 @@ class Interpolator {
 	}
 
 	static void interpolate(Model project) {
-		new Interpolator(project).interpolateFields(project);
+		project.transform(new Interpolator(project));
 	}
-
-	@SuppressWarnings({ "unchecked", "rawtypes" })
-	private void interpolateFields(Object obj) {
-		Class<?> clazz = obj.getClass();
-		try {
-			for (Field f : clazz.getDeclaredFields()) {
-				Object value;
-				f.setAccessible(true);
-				value = f.get(obj);
-				if (value == null || value instanceof Boolean || value instanceof Number) {
-					// do nothing
-				} else if (value instanceof String) {
-					f.set(obj, interpolate((String) value));
-				} else if (value instanceof List) {
-					List<Object> replacements = new ArrayList<>();
- 					for (Object x : (List) value) {
- 						if (x instanceof String) {
- 							replacements.add(interpolate((String)x));
- 						} else {
- 							interpolateFields(x);
- 							replacements.add(x);
- 						}
-					}
-					((List)value).clear();
-					((List)value).addAll(replacements);
-				} else if (value instanceof Map) {
-					Map map = (Map) value;
-					for (Object key : map.keySet()) {
-						Object val = map.get(key);
-						if (val != null && val instanceof String) {
-							map.put(key, interpolate((String)val));
-						}
-					}
-				} else {
-					interpolateFields(value);
-				}
-			}
-		} catch (IllegalArgumentException e) {
-			throw new RuntimeException(e);
-		} catch (IllegalAccessException e) {
-			throw new RuntimeException(e);
-		}
-	}
-	
-	private static final Pattern RE_INTERP = Pattern
-			.compile("(^|[^\\\\])\\$\\{([^}]+)\\}");
 
 	private String interpolate(String s) {
-		if (s == null)
+		if (s == null) {
 			return s;
+		}
 		StringBuilder out = new StringBuilder();
-		Matcher m = RE_INTERP.matcher(s);
-		int last = 0;
-		while (m.find()) {
-			if (m.end(1) > last) {
-				out.append(s.substring(last, m.end(1)));
-				last = m.end(1);
+		int pos = 0;
+		for (;;) {
+			int i = s.indexOf("${", pos);
+			if (i < 0) {
+				break;
 			}
-			String key = m.group(2);
-			out.append(resolveInterpolation(key));
-			last = m.end();
+			int j = s.indexOf('}', i + 2);
+			if (i < 0) {
+				break;
+			}
+			String key = s.substring(i + 2, j);
+			out.append(s.substring(pos, i));
+			out.append(interpolate(resolveInterpolation(key)));
+			pos = j + 1;
 		}
-		if (last == 0) {
+		if (pos == 0) {
 			return s;
 		}
-		out.append(s.substring(last, s.length()));
+		out.append(s.substring(pos, s.length()));
 		return out.toString();
 	}
 
 	private String resolveInterpolation(String key) {
 		switch (key) {
 		case "basedir":
+		case "project.basedir":
 			return "./";
 		case "project.groupId":
-			return project.getGroupId();
-		case "project.artifactId":
-			return project.getArtifactId();
-		case "project.version":
-			return project.getVersion();
 		case "pom.groupId":
 			return project.getGroupId();
+		case "project.artifactId":
 		case "pom.artifactId":
 			return project.getArtifactId();
+		case "project.version":
 		case "pom.version":
 			return project.getVersion();
+		case "project.build.directory":
+			return project.getBuild().getDirectory();
 		}
 		String value = project.getProperties().get(key);
 		if (value != null) {
 			return value;
 		}
-		System.err.println(project.getGroupId() + ":" + project.getArtifactId() + ":" + project.getVersion() + " Warning: unimplemented interpolation: " + key);
+		System.err.println(project.getGroupId() + ":" + project.getArtifactId()
+				+ ":" + project.getVersion()
+				+ " Warning: unimplemented interpolation: " + key);
 		return key;
+	}
+
+	@Override
+	public String transform(String s) {
+		return interpolate(s);
 	}
 }

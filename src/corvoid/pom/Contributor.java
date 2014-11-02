@@ -70,6 +70,35 @@ public class Contributor {
         }
     }
 
+    public Contributor(Contributor contributor1, Contributor contributor2) {
+        name = contributor2.name == null ? contributor1.name : contributor2.name;
+        email = contributor2.email == null ? contributor1.email : contributor2.email;
+        url = contributor2.url == null ? contributor1.url : contributor2.url;
+        organization = contributor2.organization == null ? contributor1.organization : contributor2.organization;
+        organizationUrl = contributor2.organizationUrl == null ? contributor1.organizationUrl : contributor2.organizationUrl;
+        roles.addAll(contributor1.roles);
+        roles.addAll(contributor2.roles);
+        timezone = contributor2.timezone == null ? contributor1.timezone : contributor2.timezone;
+        properties.putAll(contributor1.properties);
+        properties.putAll(contributor2.properties);
+    }
+
+    public void transform(Transformer transformer) {
+        name = transformer.transform(name);
+        email = transformer.transform(email);
+        url = transformer.transform(url);
+        organization = transformer.transform(organization);
+        organizationUrl = transformer.transform(organizationUrl);
+        for (int i = 0; i < roles.size(); i++) {
+            roles.set(i, transformer.transform(roles.get(i)));
+        }
+        timezone = transformer.transform(timezone);
+        for (String key: properties.keySet()) {
+            properties.put(key, transformer.transform(properties.get(key)));
+        }
+    }
+
+
     public String getName() {
         return name;
     }

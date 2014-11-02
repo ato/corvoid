@@ -9,7 +9,7 @@ import javax.xml.stream.XMLStreamReader;
 import static javax.xml.stream.XMLStreamReader.START_ELEMENT;
 
 public class Activation {
-    private boolean activeByDefault = false;
+    private Boolean activeByDefault;
     private String jdk;
     private ActivationOS os = new ActivationOS();
     private ActivationProperty property = new ActivationProperty();
@@ -47,7 +47,23 @@ public class Activation {
         }
     }
 
-    public boolean isActiveByDefault() {
+    public Activation(Activation activation1, Activation activation2) {
+        activeByDefault = activation2.activeByDefault == null ? activation1.activeByDefault : activation2.activeByDefault;
+        jdk = activation2.jdk == null ? activation1.jdk : activation2.jdk;
+        os = new ActivationOS(activation1.os, activation2.os);
+        property = new ActivationProperty(activation1.property, activation2.property);
+        file = new ActivationFile(activation1.file, activation2.file);
+    }
+
+    public void transform(Transformer transformer) {
+        jdk = transformer.transform(jdk);
+        os.transform(transformer);
+        property.transform(transformer);
+        file.transform(transformer);
+    }
+
+
+    public Boolean getActiveByDefault() {
         return activeByDefault;
     }
 

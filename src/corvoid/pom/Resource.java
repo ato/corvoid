@@ -10,7 +10,7 @@ import static javax.xml.stream.XMLStreamReader.START_ELEMENT;
 
 public class Resource {
     private String targetPath;
-    private boolean filtering = false;
+    private Boolean filtering;
     private String directory;
     private List<String> includes = new ArrayList<>();
     private List<String> excludes = new ArrayList<>();
@@ -59,11 +59,33 @@ public class Resource {
         }
     }
 
+    public Resource(Resource resource1, Resource resource2) {
+        targetPath = resource2.targetPath == null ? resource1.targetPath : resource2.targetPath;
+        filtering = resource2.filtering == null ? resource1.filtering : resource2.filtering;
+        directory = resource2.directory == null ? resource1.directory : resource2.directory;
+        includes.addAll(resource1.includes);
+        includes.addAll(resource2.includes);
+        excludes.addAll(resource1.excludes);
+        excludes.addAll(resource2.excludes);
+    }
+
+    public void transform(Transformer transformer) {
+        targetPath = transformer.transform(targetPath);
+        directory = transformer.transform(directory);
+        for (int i = 0; i < includes.size(); i++) {
+            includes.set(i, transformer.transform(includes.get(i)));
+        }
+        for (int i = 0; i < excludes.size(); i++) {
+            excludes.set(i, transformer.transform(excludes.get(i)));
+        }
+    }
+
+
     public String getTargetPath() {
         return targetPath;
     }
 
-    public boolean isFiltering() {
+    public Boolean getFiltering() {
         return filtering;
     }
 

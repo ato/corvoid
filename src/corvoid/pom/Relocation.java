@@ -42,6 +42,21 @@ public class Relocation {
         }
     }
 
+    public Relocation(Relocation relocation1, Relocation relocation2) {
+        groupId = relocation2.groupId == null ? relocation1.groupId : relocation2.groupId;
+        artifactId = relocation2.artifactId == null ? relocation1.artifactId : relocation2.artifactId;
+        version = relocation2.version == null ? relocation1.version : relocation2.version;
+        message = relocation2.message == null ? relocation1.message : relocation2.message;
+    }
+
+    public void transform(Transformer transformer) {
+        groupId = transformer.transform(groupId);
+        artifactId = transformer.transform(artifactId);
+        version = transformer.transform(version);
+        message = transformer.transform(message);
+    }
+
+
     public String getGroupId() {
         return groupId;
     }

@@ -37,6 +37,19 @@ public class Site {
         }
     }
 
+    public Site(Site site1, Site site2) {
+        id = site2.id == null ? site1.id : site2.id;
+        name = site2.name == null ? site1.name : site2.name;
+        url = site2.url == null ? site1.url : site2.url;
+    }
+
+    public void transform(Transformer transformer) {
+        id = transformer.transform(id);
+        name = transformer.transform(name);
+        url = transformer.transform(url);
+    }
+
+
     public String getId() {
         return id;
     }

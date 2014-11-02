@@ -52,6 +52,25 @@ public class DistributionManagement {
         }
     }
 
+    public DistributionManagement(DistributionManagement distributionManagement1, DistributionManagement distributionManagement2) {
+        repository = new DeploymentRepository(distributionManagement1.repository, distributionManagement2.repository);
+        snapshotRepository = new DeploymentRepository(distributionManagement1.snapshotRepository, distributionManagement2.snapshotRepository);
+        site = new Site(distributionManagement1.site, distributionManagement2.site);
+        downloadUrl = distributionManagement2.downloadUrl == null ? distributionManagement1.downloadUrl : distributionManagement2.downloadUrl;
+        relocation = new Relocation(distributionManagement1.relocation, distributionManagement2.relocation);
+        status = distributionManagement2.status == null ? distributionManagement1.status : distributionManagement2.status;
+    }
+
+    public void transform(Transformer transformer) {
+        repository.transform(transformer);
+        snapshotRepository.transform(transformer);
+        site.transform(transformer);
+        downloadUrl = transformer.transform(downloadUrl);
+        relocation.transform(transformer);
+        status = transformer.transform(status);
+    }
+
+
     public DeploymentRepository getRepository() {
         return repository;
     }

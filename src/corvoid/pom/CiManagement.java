@@ -43,6 +43,22 @@ public class CiManagement {
         }
     }
 
+    public CiManagement(CiManagement ciManagement1, CiManagement ciManagement2) {
+        system = ciManagement2.system == null ? ciManagement1.system : ciManagement2.system;
+        url = ciManagement2.url == null ? ciManagement1.url : ciManagement2.url;
+        notifiers.addAll(ciManagement1.notifiers);
+        notifiers.addAll(ciManagement2.notifiers);
+    }
+
+    public void transform(Transformer transformer) {
+        system = transformer.transform(system);
+        url = transformer.transform(url);
+        for (int i = 0; i < notifiers.size(); i++) {
+            notifiers.get(i).transform(transformer);
+        }
+    }
+
+
     public String getSystem() {
         return system;
     }

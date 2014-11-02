@@ -12,7 +12,7 @@ public class Parent {
     private String artifactId;
     private String groupId;
     private String version;
-    private String relativePath = "../pom.xml";
+    private String relativePath;
 
     public Parent() {}
 
@@ -41,6 +41,21 @@ public class Parent {
             }
         }
     }
+
+    public Parent(Parent parent1, Parent parent2) {
+        artifactId = parent2.artifactId == null ? parent1.artifactId : parent2.artifactId;
+        groupId = parent2.groupId == null ? parent1.groupId : parent2.groupId;
+        version = parent2.version == null ? parent1.version : parent2.version;
+        relativePath = parent2.relativePath == null ? parent1.relativePath : parent2.relativePath;
+    }
+
+    public void transform(Transformer transformer) {
+        artifactId = transformer.transform(artifactId);
+        groupId = transformer.transform(groupId);
+        version = transformer.transform(version);
+        relativePath = transformer.transform(relativePath);
+    }
+
 
     public String getArtifactId() {
         return artifactId;

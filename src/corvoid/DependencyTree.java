@@ -38,7 +38,7 @@ class DependencyTree {
 				if (!exclusions.contains(coord) && 
 						!versions.containsKey(coord) && 
 						(dep.getScope() == null || dep.getScope().equals("compile")) 
-						&& !dep.isOptional()) {
+						&& (dep.getOptional() == null || dep.getOptional() == false)) {
 					String version = dep.getVersion();
 					if (version == null) {
 						// try to find version in DependencyManagement section
@@ -59,7 +59,7 @@ class DependencyTree {
 						for (Exclusion exclusion : dep.getExclusions()) {
 							node.exclusions.add(new Coord(exclusion.getGroupId(), exclusion.getArtifactId()));
 						}
-						node.future = cache.readAsync(coord, version);
+						node.project = cache.readAndInheritProject(coord, version);
 						node.source = dep;
 						children.add(node);
 					}
@@ -99,7 +99,7 @@ class DependencyTree {
 			node.resolve();
 			root = node;
 		} finally {
-			cache.threadPool.shutdown();
+			//cache.threadPool.shutdown();
 		}
 	}
 	

@@ -9,7 +9,7 @@ import javax.xml.stream.XMLStreamReader;
 import static javax.xml.stream.XMLStreamReader.START_ELEMENT;
 
 public class RepositoryPolicy {
-    private boolean enabled = true;
+    private Boolean enabled;
     private String updatePolicy;
     private String checksumPolicy;
 
@@ -37,7 +37,19 @@ public class RepositoryPolicy {
         }
     }
 
-    public boolean isEnabled() {
+    public RepositoryPolicy(RepositoryPolicy repositoryPolicy1, RepositoryPolicy repositoryPolicy2) {
+        enabled = repositoryPolicy2.enabled == null ? repositoryPolicy1.enabled : repositoryPolicy2.enabled;
+        updatePolicy = repositoryPolicy2.updatePolicy == null ? repositoryPolicy1.updatePolicy : repositoryPolicy2.updatePolicy;
+        checksumPolicy = repositoryPolicy2.checksumPolicy == null ? repositoryPolicy1.checksumPolicy : repositoryPolicy2.checksumPolicy;
+    }
+
+    public void transform(Transformer transformer) {
+        updatePolicy = transformer.transform(updatePolicy);
+        checksumPolicy = transformer.transform(checksumPolicy);
+    }
+
+
+    public Boolean getEnabled() {
         return enabled;
     }
 

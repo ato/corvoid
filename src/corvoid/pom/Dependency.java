@@ -12,12 +12,12 @@ public class Dependency {
     private String groupId;
     private String artifactId;
     private String version;
-    private String type = "jar";
+    private String type;
     private String classifier;
     private String scope;
     private String systemPath;
     private List<Exclusion> exclusions = new ArrayList<>();
-    private boolean optional = false;
+    private Boolean optional;
 
     public Dependency() {}
 
@@ -73,6 +73,33 @@ public class Dependency {
         }
     }
 
+    public Dependency(Dependency dependency1, Dependency dependency2) {
+        groupId = dependency2.groupId == null ? dependency1.groupId : dependency2.groupId;
+        artifactId = dependency2.artifactId == null ? dependency1.artifactId : dependency2.artifactId;
+        version = dependency2.version == null ? dependency1.version : dependency2.version;
+        type = dependency2.type == null ? dependency1.type : dependency2.type;
+        classifier = dependency2.classifier == null ? dependency1.classifier : dependency2.classifier;
+        scope = dependency2.scope == null ? dependency1.scope : dependency2.scope;
+        systemPath = dependency2.systemPath == null ? dependency1.systemPath : dependency2.systemPath;
+        exclusions.addAll(dependency1.exclusions);
+        exclusions.addAll(dependency2.exclusions);
+        optional = dependency2.optional == null ? dependency1.optional : dependency2.optional;
+    }
+
+    public void transform(Transformer transformer) {
+        groupId = transformer.transform(groupId);
+        artifactId = transformer.transform(artifactId);
+        version = transformer.transform(version);
+        type = transformer.transform(type);
+        classifier = transformer.transform(classifier);
+        scope = transformer.transform(scope);
+        systemPath = transformer.transform(systemPath);
+        for (int i = 0; i < exclusions.size(); i++) {
+            exclusions.get(i).transform(transformer);
+        }
+    }
+
+
     public String getGroupId() {
         return groupId;
     }
@@ -105,7 +132,7 @@ public class Dependency {
         return exclusions;
     }
 
-    public boolean isOptional() {
+    public Boolean getOptional() {
         return optional;
     }
 }

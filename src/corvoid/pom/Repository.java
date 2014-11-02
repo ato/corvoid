@@ -14,7 +14,7 @@ public class Repository {
     private String id;
     private String name;
     private String url;
-    private String layout = "default";
+    private String layout;
 
     public Repository() {}
 
@@ -51,6 +51,25 @@ public class Repository {
             }
         }
     }
+
+    public Repository(Repository repository1, Repository repository2) {
+        releases = new RepositoryPolicy(repository1.releases, repository2.releases);
+        snapshots = new RepositoryPolicy(repository1.snapshots, repository2.snapshots);
+        id = repository2.id == null ? repository1.id : repository2.id;
+        name = repository2.name == null ? repository1.name : repository2.name;
+        url = repository2.url == null ? repository1.url : repository2.url;
+        layout = repository2.layout == null ? repository1.layout : repository2.layout;
+    }
+
+    public void transform(Transformer transformer) {
+        releases.transform(transformer);
+        snapshots.transform(transformer);
+        id = transformer.transform(id);
+        name = transformer.transform(name);
+        url = transformer.transform(url);
+        layout = transformer.transform(layout);
+    }
+
 
     public RepositoryPolicy getReleases() {
         return releases;
