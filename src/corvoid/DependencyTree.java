@@ -106,7 +106,7 @@ class DependencyTree {
 	private void buildClasspath(Node node, StringBuilder out) {
 		if (node.source != null) {
 			Coord coord = new Coord(node.source.getGroupId(), node.source.getArtifactId());
-			out.append(cache.artifactPath(coord, versions.get(coord)));
+			out.append(cache.artifactPath(coord, versions.get(coord), node.source.getType()));
 			out.append(":");
 		}
 		for (Node child: node.children) {
@@ -134,6 +134,20 @@ class DependencyTree {
 			out.println(coord);
 		}
 
+	}
+
+	public void fetchDependencies(Node node) throws IOException {
+		if (node.source != null) {
+			Coord coord = new Coord(node.source.getGroupId(), node.source.getArtifactId());
+			cache.fetch(coord, versions.get(coord), node.source.getType());			
+		}
+		for (Node child: node.children) {
+			fetchDependencies(child);
+		}
+	}
+	
+	public void fetchDependencies() throws IOException {
+		fetchDependencies(root);
 	}
 	
 }

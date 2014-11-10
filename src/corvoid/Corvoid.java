@@ -111,6 +111,7 @@ public class Corvoid {
 		switch (args[0]) {
 		case "new": newProject(args[1]); break;
 		case "classpath": System.out.println(tree().classpath()); break;
+		case "deps": tree().fetchDependencies(); break;
 		case "tree": tree().print(System.out); break;
 		case "compile": compile(); break;
 		case "run": run(args); break;

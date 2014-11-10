@@ -28,37 +28,43 @@ class Cache {
 		return new File(new File(groupDir(coord.groupId), coord.artifactId), version);
 	}
 	
-	public File artifactPath(Coord coord, String version) {
-		return new File(artifactDir(coord, version), coord.artifactId + "-" + version + ".pom");
+	public File artifactPath(Coord coord, String version, String type) {
+		type = type == null ? "jar" : type;
+		return new File(artifactDir(coord, version), coord.artifactId + "-" + version + "." + type);
 	}
 	
-	private File pomPath(Coord coord, String version) {
-		return new File(artifactDir(coord, version), coord.artifactId + "-" + version + ".pom");
-	}
-	private URL pomUrl(Coord coord, String version) {
+	private URL artifactUrl(Coord coord, String version, String type) {
 		try {
-			return new URL("http://repo1.maven.org/maven2/" + coord.groupId.replace('.', '/') + "/" + coord.artifactId + "/" + version + "/" + coord.artifactId + "-" + version + ".pom");
+			type = type == null ? "jar" : type;
+			return new URL("http://repo1.maven.org/maven2/" + coord.groupId.replace('.', '/') + "/" + coord.artifactId + "/" + version + "/" + coord.artifactId + "-" + version + "." + type);
 		} catch (MalformedURLException e) {
 			throw new RuntimeException(e);
 		}
 	}
 	
-	Model readProject(Coord coord, String version) throws XMLStreamException, IOException {
-		File path = pomPath(coord, version);
+	public File fetch(Coord coord, String version, String type) throws IOException {
+		URL url = artifactUrl(coord, version, type);
+		File path = artifactPath(coord, version, type);
 		if (!path.exists()) {
 			path.getParentFile().mkdirs();
-			URL url = pomUrl(coord, version);
+
 			System.out.println("Fetching " + url);
 			try (InputStream in = url.openStream();
 					OutputStream out = new FileOutputStream(path)) {
 				byte[] buf = new byte[8192];
 				for (;;) {
 					int nbytes = in.read(buf);
-					if (nbytes == -1) break;
+					if (nbytes == -1)
+						break;
 					out.write(buf, 0, nbytes);
 				}
 			}
 		}
+		return path;
+	}
+	
+	Model readProject(Coord coord, String version) throws XMLStreamException, IOException {
+		File path = fetch(coord, version, "pom");
 		try (InputStream in = new FileInputStream(path)) {
 			XMLStreamReader xml = XMLInputFactory.newInstance().createXMLStreamReader(new StreamSource(in));
 			xml.nextTag();
