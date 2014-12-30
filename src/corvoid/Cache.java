@@ -18,7 +18,7 @@ import corvoid.pom.Model;
 
 class Cache {
 	//ExecutorService threadPool = Executors.newFixedThreadPool(8);
-	final File root = new File(new File(System.getProperty("user.home"), ".m2"), "repositoryx");
+	final File root = new File(new File(System.getProperty("user.home"), ".m2"), "repository");
 	
 	private File groupDir(String groupId) {
 		return new File(root, groupId.replace('.', '/'));

@@ -1,22 +1,20 @@
 package corvoid;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
+import static java.nio.file.StandardWatchEventKinds.*;
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.io.FileWriter;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.io.Reader;
-import java.io.Writer;
+import java.io.*;
 import java.lang.ProcessBuilder.Redirect;
+import java.nio.file.*;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Consumer;
 
+import javax.tools.JavaCompiler;
+import javax.tools.ToolProvider;
 import javax.xml.stream.FactoryConfigurationError;
 import javax.xml.stream.XMLInputFactory;
 import javax.xml.stream.XMLStreamException;
@@ -26,6 +24,17 @@ import javax.xml.transform.stream.StreamSource;
 import corvoid.pom.Model;
 
 public class Corvoid {
+	
+	final File projectRoot;
+	
+	public Corvoid() {
+		this.projectRoot = new File(System.getProperty("user.dir"));
+	}
+
+	public Corvoid(File projectRoot) {
+		this.projectRoot = projectRoot;
+	}
+	
 	private String skeletonPom() throws IOException {
 		try (Reader r = new InputStreamReader(Corvoid.class.getResourceAsStream("skeleton.pom"), UTF_8)) {			
 			StringBuilder sb = new StringBuilder();
@@ -102,12 +111,12 @@ public class Corvoid {
 	}
 	
 	public Model parse() throws XMLStreamException, FactoryConfigurationError, FileNotFoundException {
-		XMLStreamReader xml = XMLInputFactory.newInstance().createXMLStreamReader(new StreamSource(new FileInputStream("pom.xml")));
+		XMLStreamReader xml = XMLInputFactory.newInstance().createXMLStreamReader(new StreamSource(new FileInputStream(new File(projectRoot, "pom.xml"))));
 		xml.nextTag();
 		return new Model(xml);
 	}
 	
-	public void command(String args[]) throws XMLStreamException, IOException {
+	public void command(String args[]) throws XMLStreamException, IOException, InterruptedException {
 		switch (args[0]) {
 		case "new": newProject(args[1]); break;
 		case "classpath": System.out.println(tree().classpath()); break;
@@ -115,6 +124,7 @@ public class Corvoid {
 		case "tree": tree().print(System.out); break;
 		case "compile": compile(); break;
 		case "run": run(args); break;
+		case "watch": watch(); break;
 		}
 	}
 
@@ -158,8 +168,8 @@ public class Corvoid {
 			}
 			return list;
 		}
-		
-		
+
+
 		List<String> buildCommandLine() {
 			List<String> cmd = new ArrayList<>();
 			cmd.add("javac");
@@ -178,8 +188,8 @@ public class Corvoid {
 			return cmd;
 		}
 	}
-	
-	private void compile() throws XMLStreamException, IOException {
+
+	private CompilerOptions buildCompilerOptions() throws IOException, XMLStreamException {
 		Model project = new Model(superPom(), parse());
 		Interpolator.interpolate(project);
 		DependencyTree tree = new DependencyTree();
@@ -194,6 +204,22 @@ public class Corvoid {
 		if (options.outDir == null) {
 			options.outDir = new File("target/classes");
 		}
+		return options;
+	}
+	
+	private void compile() throws XMLStreamException, IOException {
+		CompilerOptions options = buildCompilerOptions();
+		compileViaToolApi(options);
+	}
+
+	private void compileViaToolApi(CompilerOptions options) {
+		JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
+		List<String> cmd = options.buildCommandLine();
+		cmd.remove(0); // drop javac
+		compiler.run(null, null, null, cmd.toArray(new String[cmd.size()]));
+	}
+
+	private void compileExternal(CompilerOptions options) throws IOException {
 		List<String> cmd = options.buildCommandLine();
 		for (String s : cmd) {
 			System.out.print(s);
@@ -202,15 +228,61 @@ public class Corvoid {
 		System.out.println();
 		try {
 			new ProcessBuilder().command(cmd)
-			.redirectError(Redirect.INHERIT)
-			.redirectOutput(Redirect.INHERIT)
-			.start().waitFor();
+					.redirectError(Redirect.INHERIT)
+					.redirectOutput(Redirect.INHERIT)
+					.start().waitFor();
 		} catch (InterruptedException e) {
 			throw new RuntimeException(e);
 		}
-		
 	}
-	
+
+	private void watch() throws IOException, XMLStreamException, InterruptedException {
+		CompilerOptions options = buildCompilerOptions();
+		final WatchService watcher = FileSystems.getDefault().newWatchService();
+		final AtomicLong dirCount = new AtomicLong(0);
+		Files.walk(options.srcDir.toPath()).forEach(new Consumer<Path>() {
+			@Override
+			public void accept(Path path) {
+				try {
+					if (!Files.isDirectory(path))
+						return;
+					path.register(watcher, ENTRY_CREATE, ENTRY_DELETE, ENTRY_MODIFY);
+					dirCount.incrementAndGet();
+				} catch (IOException e) {
+					throw new UncheckedIOException(e);
+				}
+			}
+		});
+
+		System.out.println("Watching " + dirCount.get() + " directories");
+
+		for (;;) {
+			WatchKey key = watcher.take();
+			Path dir = (Path) key.watchable();
+
+			boolean recompile = false;
+
+			for (WatchEvent<?> event : key.pollEvents()) {
+				WatchEvent.Kind<?> kind = event.kind();
+				if (kind == OVERFLOW) {
+					recompile = true;
+					break;
+				}
+				Path filename = dir.resolve(((WatchEvent<Path>)event).context());
+				if (filename.toString().endsWith(".java")) {
+					recompile = true;
+				} else if (kind == ENTRY_CREATE && Files.isDirectory(filename)) {
+					filename.register(watcher, ENTRY_CREATE, ENTRY_DELETE, ENTRY_MODIFY);
+				}
+			}
+
+			if (recompile) {
+				compileViaToolApi(options);
+			}
+
+			key.reset();
+		}
+	}
 
 	public static void main(String args[]) throws Exception {
 		new Corvoid().command(args);
