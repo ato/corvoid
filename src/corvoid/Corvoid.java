@@ -115,16 +115,33 @@ public class Corvoid {
 		xml.nextTag();
 		return new Model(xml);
 	}
+
+	private void usage() {
+		System.out.println("corvoid COMMAND");
+		System.out.println("Fetch dependencies and build Java projects");
+		System.out.println("\nCommands:");
+		System.out.println("  classpath  - print the project's classpath");
+		System.out.println("  compile    - compile the project");
+		System.out.println("  deps       - fetch dependencies");
+		System.out.println("  new        - create a new project");
+		System.out.println("  tree       - print a dependency tree");
+		System.out.println("  run        - run a class");
+		System.out.println("  watch      - watch for changes and recompile when seen");
+		System.exit(1);
+	}
 	
 	public void command(String args[]) throws XMLStreamException, IOException, InterruptedException {
+		if (args.length == 0)
+			usage();
 		switch (args[0]) {
-		case "new": newProject(args[1]); break;
-		case "classpath": System.out.println(tree().classpath()); break;
-		case "deps": tree().fetchDependencies(); break;
-		case "tree": tree().print(System.out); break;
-		case "compile": compile(); break;
-		case "run": run(args); break;
-		case "watch": watch(); break;
+			case "new": newProject(args[1]); break;
+			case "classpath": System.out.println(tree().classpath()); break;
+			case "deps": tree().fetchDependencies(); break;
+			case "tree": tree().print(System.out); break;
+			case "compile": compile(); break;
+			case "run": run(args); break;
+			case "watch": watch(); break;
+			default: usage();
 		}
 	}
 

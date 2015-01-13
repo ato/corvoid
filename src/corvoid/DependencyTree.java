@@ -94,14 +94,50 @@ public class DependencyTree {
 				}
 			}
 		}
-		
-		void print(PrintStream out) {
-			for (int i = 0; i < depth; i++) {
-				out.print("  ");
-			}
-			out.format("%s:%s\n", model.getGroupId(), model.getArtifactId());
+
+		/* by aioobe http://stackoverflow.com/a/3758880 */
+		public String formatBytes(long bytes) {
+			int unit = 1024;
+			if (bytes < unit) return bytes + " B";
+			int exp = (int) (Math.log(bytes) / Math.log(unit));
+			char pre = "KMGTPE".charAt(exp-1);
+			return String.format("%.1f %sB", bytes / Math.pow(unit, exp), pre);
 		}
 		
+		void print(PrintStream out) {
+			StringBuilder indent = new StringBuilder();
+			for (int i = 0; i < depth; i++) {
+				indent.append("  ");
+			}
+			File path = artifactPath();
+			String cs;
+			if (model.getArtifactId().equals(model.getGroupId())) {
+				cs = String.format("%s%s %s", indent, model.getArtifactId(), version());
+			} else {
+				cs = String.format("%s%s:%s %s", indent, model.getGroupId(), model.getArtifactId(), version());
+			}
+			if (path != null && path.exists()) {
+				out.format("%-60s %8s\n", cs, formatBytes(path.length()));
+			} else {
+				out.format("%s\n", cs);
+			}
+		}
+
+		Coord coord() {
+			return new Coord(model.getGroupId(), model.getArtifactId());
+		}
+
+		String version() {
+			return versions.get(coord());
+		}
+
+		File artifactPath() {
+			if (source == null) {
+				return null;
+			}
+			return cache.artifactPath(coord(), version(), source.getType());
+		}
+
 		public List<Node> children() {
 			return children;
 		}
@@ -122,8 +158,7 @@ public class DependencyTree {
 	
 	private void buildClasspath(Node node, List<File> out) {
 		if (node.source != null) {
-			Coord coord = new Coord(node.source.getGroupId(), node.source.getArtifactId());
-			out.add(cache.artifactPath(coord, versions.get(coord), node.source.getType()));
+			out.add(node.artifactPath());
 		}
 		for (Node child: node.children) {
 			buildClasspath(child, out);
@@ -158,11 +193,12 @@ public class DependencyTree {
 	
 	public void print(PrintStream out) {
 		print(root, out);
-		out.println("\nUnconstrained:");
-		for (Coord coord : unconstrained) {
-			out.println(coord);
+		if (!unconstrained.isEmpty()) {
+			out.println("\nUnconstrained:");
+			for (Coord coord : unconstrained) {
+				out.println(coord);
+			}
 		}
-
 	}
 
 	public void fetchDependencies(Node node) throws IOException {
