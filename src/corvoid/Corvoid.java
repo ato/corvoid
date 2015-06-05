@@ -1,17 +1,6 @@
 package corvoid;
 
-import static java.nio.charset.StandardCharsets.UTF_8;
-import static java.nio.file.StandardWatchEventKinds.*;
-
-import java.io.*;
-import java.lang.ProcessBuilder.Redirect;
-import java.nio.file.*;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.concurrent.atomic.AtomicLong;
-import java.util.function.Consumer;
+import corvoid.pom.Model;
 
 import javax.tools.JavaCompiler;
 import javax.tools.ToolProvider;
@@ -20,8 +9,18 @@ import javax.xml.stream.XMLInputFactory;
 import javax.xml.stream.XMLStreamException;
 import javax.xml.stream.XMLStreamReader;
 import javax.xml.transform.stream.StreamSource;
+import java.io.*;
+import java.lang.ProcessBuilder.Redirect;
+import java.nio.file.*;
+import java.util.*;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Consumer;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipFile;
+import java.util.zip.ZipOutputStream;
 
-import corvoid.pom.Model;
+import static java.nio.charset.StandardCharsets.UTF_8;
+import static java.nio.file.StandardWatchEventKinds.*;
 
 public class Corvoid {
 	
@@ -63,6 +62,10 @@ public class Corvoid {
 		}
 		return superPom;
 	}
+
+	private File target() {
+		return new File(projectRoot, "target");
+	}
 	
 	private String javaMinorVersion() {
 		return System.getProperty("java.version").replaceFirst("^(\\d+\\.\\d+)\\..*", "$1");
@@ -103,14 +106,14 @@ public class Corvoid {
 	}
 	
 	public DependencyTree tree() throws XMLStreamException, IOException {
-		Model project = parse();
+		Model project = parseModel();
 		Interpolator.interpolate(project);
 		DependencyTree tree = new DependencyTree();
 		tree.resolve(project);
 		return tree;
 	}
-	
-	public Model parse() throws XMLStreamException, FactoryConfigurationError, FileNotFoundException {
+
+	public Model parseModel() throws XMLStreamException, FactoryConfigurationError, FileNotFoundException {
 		XMLStreamReader xml = XMLInputFactory.newInstance().createXMLStreamReader(new StreamSource(new FileInputStream(new File(projectRoot, "pom.xml"))));
 		xml.nextTag();
 		return new Model(xml);
@@ -140,12 +143,84 @@ public class Corvoid {
 			case "tree": tree().print(System.out); break;
 			case "compile": compile(); break;
 			case "run": run(args); break;
+			case "uberjar": uberjar(); break;
 			case "watch": watch(); break;
 			default: usage();
 		}
 	}
 
+	private static void copyStream(InputStream in, OutputStream out) throws IOException {
+		byte[] buf = new byte[16384];
+		for (;;) {
+			int n = in.read(buf);
+			if (n < 0) break;
+			out.write(buf, 0, n);
+		}
+	}
+
+	private static void copyZipEntries(ZipFile in, ZipOutputStream out, Set<String> seen) throws IOException {
+		byte[] buf = new byte[16384];
+		Enumeration<? extends ZipEntry> e = in.entries();
+		while (e.hasMoreElements()) {
+			ZipEntry entry = e.nextElement();
+			if (seen.contains(entry.getName())) {
+				// TODO: concatenate duplicate META-INF/services/*
+				continue;
+			}
+			entry.setCompressedSize(-1);
+			out.putNextEntry(entry);
+			try (InputStream stream = in.getInputStream(entry)) {
+				copyStream(stream, out);
+			}
+			out.closeEntry();
+			seen.add(entry.getName());
+		}
+	}
+
+	private static String progressBar(long current, long total) {
+		int size = 48;
+		int progress = (int)(size * current / total);
+		StringBuilder sb = new StringBuilder();
+		sb.append("[");
+		for (int i = 0; i < progress; i++) {
+			sb.append("=");
+		}
+		sb.append(">");
+		for (int i = progress + 1; i < size; i++) {
+			sb.append(" ");
+		}
+		sb.append("]");
+		return sb.toString();
+	}
+
+	private static void clearLine() {
+		System.out.print("\033[F\033[J");
+	}
+
+	private void uberjar() throws IOException, XMLStreamException {
+		Model model = parseModel();
+		DependencyTree tree = tree();
+		tree().fetchDependencies();
+		File uberjarFile = new File(target(), model.getArtifactId() + "-" + model.getVersion() + "-standalone.jar");
+		Set<String> seen = new HashSet<>();
+		try (ZipOutputStream uberjarZip = new ZipOutputStream(new FileOutputStream(uberjarFile))) {
+			int progress = 0;
+			List<File> files = tree().classpathFiles();
+			for (File f : files) {
+				System.out.println("Merging jars " + progressBar(progress++, files.size()) + " " + f.getName());
+				try (ZipFile zf = new ZipFile(f)) {
+					copyZipEntries(zf, uberjarZip, seen);
+				}
+				clearLine();
+			}
+		}
+	}
+
 	private void run(String[] args) throws XMLStreamException, IOException {
+		if (args.length < 2) {
+			System.err.println("Usage: corvoid run main-class args...");
+			System.exit(1);
+		}
 		DependencyTree tree = tree();
 		String classpath = tree.classpath();
 		List<String> command = new ArrayList<>();
@@ -207,7 +282,7 @@ public class Corvoid {
 	}
 
 	private CompilerOptions buildCompilerOptions() throws IOException, XMLStreamException {
-		Model project = new Model(superPom(), parse());
+		Model project = new Model(superPom(), parseModel());
 		Interpolator.interpolate(project);
 		DependencyTree tree = new DependencyTree();
 		tree.resolve(project);

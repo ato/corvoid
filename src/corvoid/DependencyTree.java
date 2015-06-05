@@ -1,22 +1,16 @@
 package corvoid;
 
-import java.io.File;
-import java.io.IOException;
-import java.io.PrintStream;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Future;
-
-import javax.xml.stream.XMLStreamException;
-
 import corvoid.pom.Dependency;
 import corvoid.pom.Exclusion;
 import corvoid.pom.Model;
+
+import javax.xml.stream.XMLStreamException;
+import java.io.File;
+import java.io.IOException;
+import java.io.PrintStream;
+import java.util.*;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
 
 public class DependencyTree {
 	Cache cache = new Cache();
@@ -37,7 +31,7 @@ public class DependencyTree {
 		}
 		
 		public File file() {
-			return cache.artifactPath(new Coord(model.getGroupId(), model.getArtifactId()), model.getVersion(), source.getType());
+			return cache.artifactPath(new Coord(model.getGroupId(), model.getArtifactId()), model.getVersion(), source.getClassifier(), source.getType());
 		}
 		
 		public String getArtifactId() {
@@ -135,7 +129,7 @@ public class DependencyTree {
 			if (source == null) {
 				return null;
 			}
-			return cache.artifactPath(coord(), version(), source.getType());
+			return cache.artifactPath(coord(), version(), source.getClassifier(), source.getType());
 		}
 
 		public List<Node> children() {
@@ -204,7 +198,7 @@ public class DependencyTree {
 	public void fetchDependencies(Node node) throws IOException {
 		if (node.source != null) {
 			Coord coord = new Coord(node.source.getGroupId(), node.source.getArtifactId());
-			cache.fetch(coord, versions.get(coord), node.source.getType());			
+			cache.fetch(coord, versions.get(coord), node.source.getClassifier(), node.source.getType());
 		}
 		for (Node child: node.children) {
 			fetchDependencies(child);

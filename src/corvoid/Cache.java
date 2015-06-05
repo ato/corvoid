@@ -27,10 +27,11 @@ class Cache {
 	private File artifactDir(Coord coord, String version) {
 		return new File(new File(groupDir(coord.groupId), coord.artifactId), version);
 	}
-	
-	public File artifactPath(Coord coord, String version, String type) {
+
+	public File artifactPath(Coord coord, String version, String classifier, String type) {
 		type = type == null ? "jar" : type;
-		return new File(artifactDir(coord, version), coord.artifactId + "-" + version + "." + type);
+		return new File(artifactDir(coord, version), coord.artifactId + "-" + version +
+				(classifier != null ? "-" + classifier : "") + "." + type);
 	}
 	
 	private URL artifactUrl(Coord coord, String version, String type) {
@@ -42,9 +43,9 @@ class Cache {
 		}
 	}
 	
-	public File fetch(Coord coord, String version, String type) throws IOException {
+	public File fetch(Coord coord, String version, String classifier, String type) throws IOException {
 		URL url = artifactUrl(coord, version, type);
-		File path = artifactPath(coord, version, type);
+		File path = artifactPath(coord, version, classifier, type);
 		if (!path.exists()) {
 			path.getParentFile().mkdirs();
 
@@ -64,7 +65,7 @@ class Cache {
 	}
 	
 	Model readProject(Coord coord, String version) throws XMLStreamException, IOException {
-		File path = fetch(coord, version, "pom");
+		File path = fetch(coord, version, null, "pom");
 		try (InputStream in = new FileInputStream(path)) {
 			XMLStreamReader xml = XMLInputFactory.newInstance().createXMLStreamReader(new StreamSource(in));
 			xml.nextTag();
