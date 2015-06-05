@@ -15,9 +15,7 @@ import java.nio.file.*;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
-import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
-import java.util.zip.ZipOutputStream;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.nio.file.StandardWatchEventKinds.*;
@@ -126,9 +124,11 @@ public class Corvoid {
 		System.out.println("  classpath  - print the project's classpath");
 		System.out.println("  compile    - compile the project");
 		System.out.println("  deps       - fetch dependencies");
+		System.out.println("  jar        - build a jar file of classes and resources");
 		System.out.println("  new        - create a new project");
 		System.out.println("  tree       - print a dependency tree");
 		System.out.println("  run        - run a class");
+		System.out.println("  uberjar    - build a standalone jar file");
 		System.out.println("  watch      - watch for changes and recompile when seen");
 		System.exit(1);
 	}
@@ -143,37 +143,10 @@ public class Corvoid {
 			case "tree": tree().print(System.out); break;
 			case "compile": compile(); break;
 			case "run": run(args); break;
+			case "jar": jar(); break;
 			case "uberjar": uberjar(); break;
 			case "watch": watch(); break;
 			default: usage();
-		}
-	}
-
-	private static void copyStream(InputStream in, OutputStream out) throws IOException {
-		byte[] buf = new byte[16384];
-		for (;;) {
-			int n = in.read(buf);
-			if (n < 0) break;
-			out.write(buf, 0, n);
-		}
-	}
-
-	private static void copyZipEntries(ZipFile in, ZipOutputStream out, Set<String> seen) throws IOException {
-		byte[] buf = new byte[16384];
-		Enumeration<? extends ZipEntry> e = in.entries();
-		while (e.hasMoreElements()) {
-			ZipEntry entry = e.nextElement();
-			if (seen.contains(entry.getName())) {
-				// TODO: concatenate duplicate META-INF/services/*
-				continue;
-			}
-			entry.setCompressedSize(-1);
-			out.putNextEntry(entry);
-			try (InputStream stream = in.getInputStream(entry)) {
-				copyStream(stream, out);
-			}
-			out.closeEntry();
-			seen.add(entry.getName());
 		}
 	}
 
@@ -197,21 +170,45 @@ public class Corvoid {
 		System.out.print("\033[F\033[J");
 	}
 
-	private void uberjar() throws IOException, XMLStreamException {
+	List<File> dirsToIncludeInJar() {
+		List<File> dirs = new ArrayList<>();
+		for (String s : Arrays.asList("classes", "resources")) {
+			File dir = new File(target(), s);
+			if (dir.isDirectory()) {
+				dirs.add(dir);
+			}
+		}
+		return dirs;
+	}
+
+	void uberjar() throws IOException, XMLStreamException {
 		Model model = parseModel();
 		DependencyTree tree = tree();
 		tree().fetchDependencies();
 		File uberjarFile = new File(target(), model.getArtifactId() + "-" + model.getVersion() + "-standalone.jar");
 		Set<String> seen = new HashSet<>();
-		try (ZipOutputStream uberjarZip = new ZipOutputStream(new FileOutputStream(uberjarFile))) {
+		try (JarWriter uberjar = new JarWriter(new FileOutputStream(uberjarFile))) {
+			for (File dir : dirsToIncludeInJar()) {
+				uberjar.putDirContents(dir);
+			}
 			int progress = 0;
 			List<File> files = tree().classpathFiles();
 			for (File f : files) {
 				System.out.println("Merging jars " + progressBar(progress++, files.size()) + " " + f.getName());
 				try (ZipFile zf = new ZipFile(f)) {
-					copyZipEntries(zf, uberjarZip, seen);
+					uberjar.putJarContents(zf);
 				}
 				clearLine();
+			}
+		}
+	}
+
+	void jar() throws IOException, XMLStreamException {
+		Model model = parseModel();
+		File outFile = new File(target(), model.getArtifactId() + "-" + model.getVersion() + ".jar");
+		try (JarWriter jar = new JarWriter(new FileOutputStream(outFile))) {
+			for (File dir : dirsToIncludeInJar()) {
+				jar.putDirContents(dir);
 			}
 		}
 	}
