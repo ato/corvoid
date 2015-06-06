@@ -1,23 +1,16 @@
 package corvoid;
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.net.MalformedURLException;
-import java.net.URL;
+import corvoid.pom.Model;
 
 import javax.xml.stream.XMLInputFactory;
 import javax.xml.stream.XMLStreamException;
 import javax.xml.stream.XMLStreamReader;
 import javax.xml.transform.stream.StreamSource;
-
-import corvoid.pom.Model;
+import java.io.*;
+import java.net.MalformedURLException;
+import java.net.URL;
 
 class Cache {
-	//ExecutorService threadPool = Executors.newFixedThreadPool(8);
 	final File root = new File(new File(System.getProperty("user.home"), ".m2"), "repository");
 	
 	private File groupDir(String groupId) {
@@ -83,18 +76,4 @@ class Cache {
 		Interpolator.interpolate(output);
 		return output;
 	}
-	
-	/*
-	
-	Future<Model> readAsync(final Coord coord, final String version) {
-		return threadPool.submit(new Callable<Model>() {
-
-			@Override
-			public Model call() throws Exception {
-				return readAndInheritProject(coord, version);
-			}
-			 
-		});
-	}
-	*/
 }
