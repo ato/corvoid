@@ -62,9 +62,11 @@ class Interpolator implements Transformer {
 		if (value != null) {
 			return value;
 		}
-		System.err.println(project.getGroupId() + ":" + project.getArtifactId()
-				+ ":" + project.getVersion()
-				+ " Warning: unimplemented interpolation: " + key);
+		if (System.getenv("CORVOID_VERBOSE") != null) {
+			System.err.println(project.getGroupId() + ":" + project.getArtifactId()
+					+ ":" + project.getVersion()
+					+ " Warning: unimplemented interpolation: " + key);
+		}
 		return key;
 	}
 
