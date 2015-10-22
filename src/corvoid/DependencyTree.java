@@ -55,7 +55,7 @@ public class DependencyTree {
 							}
 						}
 					}
-					if (version == null) {
+					if (version == null || version.startsWith("[") || version.startsWith("(")) {
 						unconstrained.add(coord);
 					} else {
 						unconstrained.remove(coord);

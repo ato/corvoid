@@ -239,7 +239,7 @@ public class Corvoid {
 	private static class CompilerOptions {
 		File srcDir, outDir;
 		String classpath;
-		boolean verbose = true;
+		boolean verbose = false;
 		
 		List<File> walkSources(File srcDir) {
 			List<File> list = new ArrayList<>();
