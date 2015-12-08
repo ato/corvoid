@@ -50,6 +50,7 @@
   </properties>
 
   <dependencies>
+<!-- TODO: enable in a profile for robovm
     <dependency>
       <groupId>org.codehaus.woodstox</groupId>
       <artifactId>woodstox-core-asl</artifactId>
@@ -60,5 +61,6 @@
       <artifactId>jaxp-api</artifactId>
       <version>1.4.5</version>
     </dependency>
+-->
   </dependencies>
 </project>
