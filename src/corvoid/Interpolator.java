@@ -26,7 +26,7 @@ class Interpolator implements Transformer {
 				break;
 			}
 			int j = s.indexOf('}', i + 2);
-			if (i < 0) {
+			if (j < 0) {
 				break;
 			}
 			String key = s.substring(i + 2, j);
