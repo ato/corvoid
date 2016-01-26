@@ -15,6 +15,7 @@ import java.nio.file.*;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
+import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
@@ -125,6 +126,7 @@ public class Corvoid {
 		System.out.println("  compile    - compile the project");
 		System.out.println("  deps       - fetch dependencies");
 		System.out.println("  jar        - build a jar file of classes and resources");
+		System.out.println("  lint       - check for common problems");
 		System.out.println("  new        - create a new project");
 		System.out.println("  tree       - print a dependency tree");
 		System.out.println("  run        - run a class");
@@ -146,8 +148,40 @@ public class Corvoid {
 			case "jar": jar(); break;
 			case "uberjar": uberjar(); break;
 			case "watch": watch(); break;
+			case "lint": lint(); break;
 			default: usage();
 		}
+	}
+
+	private void lint() throws IOException, XMLStreamException {
+		boolean problems = false;
+		problems |= lintDuplicateClasses();
+		System.exit(problems ? 1 : 0);
+	}
+
+	private boolean lintDuplicateClasses() throws XMLStreamException, IOException {
+		boolean problems = false;
+		Map<String,String> classes = new HashMap<>();
+		for (File jarFile : tree().classpathFiles()) {
+			try (ZipFile zip = new ZipFile(jarFile)) {
+				Enumeration<? extends ZipEntry> entries = zip.entries();
+				while (entries.hasMoreElements()) {
+					ZipEntry entry = entries.nextElement();
+					String name = entry.getName();
+					if (name.endsWith(".class")) {
+						String prev = classes.put(name, jarFile.getName());
+						if (prev != null) {
+							System.out.println("Duplicate class: " + name + " (" + prev + ", " + jarFile.getName() + ")");
+							problems = true;
+						}
+					}
+				}
+			} catch (IOException e) {
+				System.out.println(e);
+				problems = true;
+			}
+		}
+		return problems;
 	}
 
 	private static String progressBar(long current, long total) {
