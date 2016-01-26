@@ -1,0 +1,49 @@
+POM(5)
+======
+:doctype: manpage
+
+NAME
+----
+
+pom - configuration file for building Java projects
+
+DESCRIPTION
+-----------
+
+A POM (Project Object Model) is an XML file describing how to package a Java
+application or library. It includes descriptive information about the project
+such as it's name a version number, settings for the compiler and a list of
+libraries the project depends on.
+
+EXAMPLE
+-------
+
+[source,xml]
+----
+<project>
+    <modelVersion>4.0.0</modelVersion>
+    <groupId>org.example</groupId>
+    <artificatId>example-project</artifactId>
+    <version>0.1.0</version>
+
+    <properties>
+        <maven.compiler.source>1.8</maven.compiler.source>
+        <maven.compiler.target>1.8</maven.compiler.target>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>junit</groupId>
+            <artifactId>junit</artifactId>
+            <version>4.12</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+</project>
+----
+
+SEE ALSO
+--------
+corvoid(1), mvn(1)
+
+Maven POM Reference <https://maven.apache.org/pom.html>
