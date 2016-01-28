@@ -100,7 +100,7 @@ public class Corvoid {
 		String mainClass = capFirst(name);
 		File mainClassFile = new File(srcPkgDir, mainClass + ".java");
 		try (Writer w = new FileWriter(mainClassFile)) {
-			w.write("public class " + mainClass + " {\n    public static void main(String args[]) {\n        System.out.println(\"Hello, world.\");\n    }\n}\n");
+			w.write("package " + name + ";\n\npublic class " + mainClass + " {\n    public static void main(String args[]) {\n        System.out.println(\"Hello, world.\");\n    }\n}\n");
 		}
 	}
 	
