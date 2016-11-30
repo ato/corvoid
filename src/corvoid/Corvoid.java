@@ -15,6 +15,8 @@ import java.nio.file.*;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
@@ -70,8 +72,17 @@ public class Corvoid {
 		return System.getProperty("java.version").replaceFirst("^(\\d+\\.\\d+)\\..*", "$1");
 	}
 	
-	private String capFirst(String name) {
-		return Character.toUpperCase(name.charAt(0)) + name.substring(1);
+	static String capify(String name) {
+		StringBuilder buf = new StringBuilder();
+		Matcher m = Pattern.compile("(?:^|[_-])(.)").matcher(name);
+		int pos = 0;
+		while (m.find()) {
+			buf.append(name, pos, m.start());
+			buf.append(m.group(1).toUpperCase());
+			pos = m.end();
+		}
+		buf.append(name, pos, name.length());
+		return buf.toString();
 	}
 	
 	public void newProject(String name) throws IOException {
@@ -81,7 +92,7 @@ public class Corvoid {
 			System.exit(1);
 		}
 		File srcDir = new File(projectDir, "src");
-		File srcPkgDir = new File(srcDir, name);
+		File srcPkgDir = new File(srcDir, name.replace("-", ""));
 		File resDir = new File(projectDir, "resources");
 
 		projectDir.mkdir();
@@ -97,7 +108,7 @@ public class Corvoid {
 					.replace("$[java.version]", javaMinorVersion()));
 		}
 		
-		String mainClass = capFirst(name);
+		String mainClass = capify(name);
 		File mainClassFile = new File(srcPkgDir, mainClass + ".java");
 		try (Writer w = new FileWriter(mainClassFile)) {
 			w.write("package " + name + ";\n\npublic class " + mainClass + " {\n    public static void main(String args[]) {\n        System.out.println(\"Hello, world.\");\n    }\n}\n");
