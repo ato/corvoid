@@ -30,7 +30,7 @@ class Cache {
 	private URL artifactUrl(Coord coord, String version, String type) {
 		try {
 			type = type == null ? "jar" : type;
-			return new URL("http://repo1.maven.org/maven2/" + coord.groupId.replace('.', '/') + "/" + coord.artifactId + "/" + version + "/" + coord.artifactId + "-" + version + "." + type);
+			return new URL("https://repo1.maven.org/maven2/" + coord.groupId.replace('.', '/') + "/" + coord.artifactId + "/" + version + "/" + coord.artifactId + "-" + version + "." + type);
 		} catch (MalformedURLException e) {
 			throw new RuntimeException(e);
 		}
