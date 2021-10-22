@@ -3,10 +3,13 @@ package corvoid;
 import java.io.*;
 import java.util.Enumeration;
 import java.util.HashSet;
+import java.util.Objects;
 import java.util.Set;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 import java.util.zip.ZipOutputStream;
+
+import static java.util.Objects.requireNonNull;
 
 class JarWriter implements Closeable {
     private final byte[] buffer = new byte[65536];
@@ -51,7 +54,7 @@ class JarWriter implements Closeable {
     }
 
     private void putDirContents(File dir, String prefix) throws IOException {
-        for (File file : dir.listFiles()) {
+        for (File file : requireNonNull(dir.listFiles())) {
             put(file, prefix);
         }
     }

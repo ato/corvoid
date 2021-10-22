@@ -22,6 +22,7 @@ import java.util.zip.ZipFile;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.nio.file.StandardWatchEventKinds.*;
+import static java.util.Objects.requireNonNull;
 
 public class Corvoid {
 	
@@ -36,7 +37,8 @@ public class Corvoid {
 	}
 	
 	private String skeletonPom() throws IOException {
-		try (Reader r = new InputStreamReader(Corvoid.class.getResourceAsStream("skeleton.pom"), UTF_8)) {			
+		try (Reader r = new InputStreamReader(requireNonNull(Corvoid.class.getResourceAsStream("skeleton.pom"),
+				"Missing resource skeleton.pom"), UTF_8)) {
 			StringBuilder sb = new StringBuilder();
 			char[] b = new char[8192];
 			for (int nread = r.read(b); nread >= 0; nread = r.read(b)) {
@@ -146,7 +148,7 @@ public class Corvoid {
 		System.exit(1);
 	}
 	
-	public void command(String args[]) throws XMLStreamException, IOException, InterruptedException {
+	public void command(String[] args) throws XMLStreamException, IOException, InterruptedException {
 		if (args.length == 0)
 			usage();
 		switch (args[0]) {
@@ -165,8 +167,7 @@ public class Corvoid {
 	}
 
 	private void lint() throws IOException, XMLStreamException {
-		boolean problems = false;
-		problems |= lintDuplicateClasses();
+		boolean problems = lintDuplicateClasses();
 		System.exit(problems ? 1 : 0);
 	}
 
@@ -228,10 +229,8 @@ public class Corvoid {
 
 	void uberjar() throws IOException, XMLStreamException {
 		Model model = parseModel();
-		DependencyTree tree = tree();
 		tree().fetchDependencies();
 		File uberjarFile = new File(target(), model.getArtifactId() + "-" + model.getVersion() + "-standalone.jar");
-		Set<String> seen = new HashSet<>();
 		try (JarWriter uberjar = new JarWriter(new FileOutputStream(uberjarFile))) {
 			for (File dir : dirsToIncludeInJar()) {
 				uberjar.putDirContents(dir);
@@ -292,7 +291,7 @@ public class Corvoid {
 			queue.add(srcDir.getAbsoluteFile());
 			while (!queue.isEmpty()) {
 				File dir = queue.remove();
-				for (File file : dir.listFiles()) {
+				for (File file : requireNonNull(dir.listFiles())) {
 					if (file.isDirectory()) {
 						queue.add(file.getAbsoluteFile());
 					} else if (file.toString().endsWith(".java")) {
@@ -330,14 +329,10 @@ public class Corvoid {
 		tree.resolve(project);
 		CompilerOptions options = new CompilerOptions();
 		options.classpath = tree.classpath();
-		options.srcDir = new File(project.getBuild().getSourceDirectory());
-		if (options.srcDir == null) {
-			options.srcDir = new File("src");
-		}
-		options.outDir = new File(project.getBuild().getOutputDirectory());
-		if (options.outDir == null) {
-			options.outDir = new File("target/classes");
-		}
+		String srcDir = project.getBuild().getSourceDirectory();
+		options.srcDir = new File(srcDir != null ? srcDir : "src");
+		String outDir = project.getBuild().getOutputDirectory();
+		options.outDir = new File(outDir != null ? outDir : "target/classes");
 		return options;
 	}
 	
@@ -350,7 +345,7 @@ public class Corvoid {
 		JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
 		List<String> cmd = options.buildCommandLine();
 		cmd.remove(0); // drop javac
-		compiler.run(null, null, null, cmd.toArray(new String[cmd.size()]));
+		compiler.run(null, null, null, cmd.toArray(new String[0]));
 	}
 
 	private void compileExternal(CompilerOptions options) throws IOException {
@@ -402,7 +397,7 @@ public class Corvoid {
 					recompile = true;
 					break;
 				}
-				Path filename = dir.resolve(((WatchEvent<Path>)event).context());
+				Path filename = dir.resolve((Path) event.context());
 				if (filename.toString().endsWith(".java")) {
 					recompile = true;
 				} else if (kind == ENTRY_CREATE && Files.isDirectory(filename)) {
@@ -418,7 +413,7 @@ public class Corvoid {
 		}
 	}
 
-	public static void main(String args[]) throws Exception {
+	public static void main(String[] args) throws Exception {
 		new Corvoid().command(args);
 	}
 

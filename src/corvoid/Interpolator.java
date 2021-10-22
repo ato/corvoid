@@ -4,7 +4,7 @@ import corvoid.pom.Model;
 import corvoid.pom.Transformer;
 
 class Interpolator implements Transformer {
-	private Model project;
+	private final Model project;
 
 	private Interpolator(Model project) {
 		this.project = project;
@@ -30,14 +30,14 @@ class Interpolator implements Transformer {
 				break;
 			}
 			String key = s.substring(i + 2, j);
-			out.append(s.substring(pos, i));
+			out.append(s, pos, i);
 			out.append(interpolate(resolveInterpolation(key)));
 			pos = j + 1;
 		}
 		if (pos == 0) {
 			return s;
 		}
-		out.append(s.substring(pos, s.length()));
+		out.append(s.substring(pos));
 		return out.toString();
 	}
 

@@ -45,7 +45,7 @@ public class DependencyTree {
 				if (!exclusions.contains(coord) && 
 						!versions.containsKey(coord) && 
 						(dep.getScope() == null || dep.getScope().equals("compile")) 
-						&& (dep.getOptional() == null || dep.getOptional() == false)) {
+						&& (dep.getOptional() == null || !dep.getOptional())) {
 					String version = dep.getVersion();
 					if (version == null) {
 						// try to find version in DependencyManagement section
