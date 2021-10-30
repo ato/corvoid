@@ -6,6 +6,7 @@ BASE="$(dirname "$(dirname "$(realpath "$0")")")"
 if [ ! -f "$BASE"/target/classes/corvoid/Corvoid.class ]; then
     echo Compiling corvoid... >&2
     mkdir -p "$BASE"/target/classes
+    cp -R "$BASE"/resources/. "$BASE/target/classes"
     javac -d "$BASE"/target/classes -sourcepath "$BASE"/src "$BASE"/src/corvoid/Corvoid.java
 fi
 
