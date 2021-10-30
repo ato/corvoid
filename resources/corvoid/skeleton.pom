@@ -6,6 +6,10 @@
     <artifactId>$[name]</artifactId>
     <version>0.1.0</version>
 
+    <properties>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    </properties>
+
     <build>
         <sourceDirectory>${basedir}/src</sourceDirectory>
         <testSourceDirectory>${basedir}/test</testSourceDirectory>
@@ -14,13 +18,17 @@
                 <directory>${basedir}/resources</directory>
             </resource>
         </resources>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.8.1</version>
+                <configuration>
+                    <release>11</release>
+                </configuration>
+            </plugin>
+        </plugins>
     </build>
-
-    <properties>
-        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <maven.compiler.source>$[java.version]</maven.compiler.source>
-        <maven.compiler.target>$[java.version]</maven.compiler.target>
-    </properties>
 
     <dependencies>
         <dependency>

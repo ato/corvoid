@@ -70,10 +70,6 @@ public class Corvoid {
 		return new File(projectRoot, "target");
 	}
 	
-	private String javaMinorVersion() {
-		return System.getProperty("java.version").replaceFirst("^(\\d+\\.\\d+)\\..*", "$1");
-	}
-	
 	static String capify(String name) {
 		StringBuilder buf = new StringBuilder();
 		Matcher m = Pattern.compile("(?:^|[_-])(.)").matcher(name);
@@ -106,8 +102,7 @@ public class Corvoid {
 		File pom = new File(projectDir, "pom.xml");
 		try (Writer w = new FileWriter(pom)) {
 			w.write(skeletonPom()
-					.replace("$[name]", name)
-					.replace("$[java.version]", javaMinorVersion()));
+					.replace("$[name]", name));
 		}
 		
 		String mainClass = capify(name);
