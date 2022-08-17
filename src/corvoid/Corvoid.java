@@ -12,6 +12,7 @@ import javax.xml.transform.stream.StreamSource;
 import java.io.*;
 import java.lang.ProcessBuilder.Redirect;
 import java.nio.file.*;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
@@ -131,6 +132,7 @@ public class Corvoid {
 		System.out.println("Fetch dependencies and build Java projects");
 		System.out.println("\nCommands:");
 		System.out.println("  classpath  - print the project's classpath");
+		System.out.println("  clean      - delete the build target directory");
 		System.out.println("  compile    - compile the project");
 		System.out.println("  deps       - fetch dependencies");
 		System.out.println("  jar        - build a jar file of classes and resources");
@@ -148,6 +150,7 @@ public class Corvoid {
 			usage();
 		switch (args[0]) {
 			case "new": newProject(args[1]); break;
+			case "clean": clean(); break;
 			case "classpath": System.out.println(tree().classpath()); break;
 			case "deps": tree().fetchDependencies(); break;
 			case "tree": tree().print(System.out); break;
@@ -159,6 +162,22 @@ public class Corvoid {
 			case "lint": lint(); break;
 			default: usage();
 		}
+	}
+
+	private void clean() throws IOException {
+		Files.walkFileTree(target().toPath(), new SimpleFileVisitor<Path>() {
+			@Override
+			public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
+				Files.delete(file);
+				return FileVisitResult.CONTINUE;
+			}
+
+			@Override
+			public FileVisitResult postVisitDirectory(Path dir, IOException exc) throws IOException {
+				Files.delete(dir);
+				return FileVisitResult.CONTINUE;
+			}
+		});
 	}
 
 	private void lint() throws IOException, XMLStreamException {
