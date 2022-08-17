@@ -226,6 +226,7 @@ public class Corvoid {
 		Model model = parseModel();
 		tree().fetchDependencies();
 		File uberjarFile = new File(target(), model.getArtifactId() + "-" + model.getVersion() + "-standalone.jar");
+		ensureTargetExists();
 		try (JarWriter uberjar = new JarWriter(new FileOutputStream(uberjarFile))) {
 			for (File dir : dirsToIncludeInJar()) {
 				uberjar.putDirContents(dir);
@@ -242,9 +243,14 @@ public class Corvoid {
 		}
 	}
 
+	private void ensureTargetExists() throws IOException {
+		Files.createDirectories(target().toPath());
+	}
+
 	void jar() throws IOException, XMLStreamException {
 		Model model = parseModel();
 		File outFile = new File(target(), model.getArtifactId() + "-" + model.getVersion() + ".jar");
+		ensureTargetExists();
 		try (JarWriter jar = new JarWriter(new FileOutputStream(outFile))) {
 			for (File dir : dirsToIncludeInJar()) {
 				jar.putDirContents(dir);
