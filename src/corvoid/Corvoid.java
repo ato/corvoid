@@ -274,7 +274,8 @@ public class Corvoid {
 		}
 	}
 
-	private void writeJarContents(Model model, JarWriter jar) throws IOException {
+	private void writeJarContents(Model model, JarWriter jar) throws IOException, XMLStreamException {
+		compile();
 		jar.writeManifest(model.getBuild().getMainClass());
 		for (File dir : dirsToIncludeInJar()) {
 			jar.putDirContents(dir);
@@ -362,7 +363,9 @@ public class Corvoid {
 	
 	private void compile() throws XMLStreamException, IOException {
 		CompilerOptions options = buildCompilerOptions();
+		System.out.println("Compiling");
 		compileViaToolApi(options);
+		clearLine();
 	}
 
 	private void compileViaToolApi(CompilerOptions options) {
