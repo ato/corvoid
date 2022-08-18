@@ -1,11 +1,9 @@
 package corvoid.pom;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
 import javax.xml.stream.XMLStreamException;
 import javax.xml.stream.XMLStreamReader;
+import java.util.*;
+
 import static javax.xml.stream.XMLStreamReader.START_ELEMENT;
 
 public class Plugin {
@@ -75,11 +73,17 @@ public class Plugin {
                     break;
                 }
                 case "configuration": {
+                    Deque<String> nameStack = new ArrayDeque<>();
                     for (int depth = 1; depth > 0;) {
                         if (xml.next() == START_ELEMENT) {
                             depth++;
+                            nameStack.addLast(xml.getLocalName());
+                        } else if (xml.getEventType() == XMLStreamReader.CHARACTERS) {
+                            String name = String.join(".", nameStack);
+                            configuration.put(name, xml.getText());
                         } else if (xml.getEventType() == XMLStreamReader.END_ELEMENT) {
                             depth--;
+                            if (depth > 0) nameStack.removeLast();
                         }
                     }
                     break;
@@ -161,6 +165,10 @@ public class Plugin {
 
     public Map<String,String> getConfiguration() {
         return configuration;
+    }
+
+    public boolean hasId(String groupId, String artifactId) {
+        return Objects.equals(groupId, this.groupId) && Objects.equals(artifactId, this.artifactId);
     }
 }
 

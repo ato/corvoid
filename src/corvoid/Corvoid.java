@@ -1,6 +1,7 @@
 package corvoid;
 
 import corvoid.pom.Model;
+import corvoid.pom.Plugin;
 
 import javax.tools.JavaCompiler;
 import javax.tools.ToolProvider;
@@ -247,9 +248,7 @@ public class Corvoid {
 		File uberjarFile = new File(target(), model.getArtifactId() + "-" + model.getVersion() + "-standalone.jar");
 		ensureTargetExists();
 		try (JarWriter uberjar = new JarWriter(new FileOutputStream(uberjarFile))) {
-			for (File dir : dirsToIncludeInJar()) {
-				uberjar.putDirContents(dir);
-			}
+			writeJarContents(model, uberjar);
 			int progress = 0;
 			List<File> files = tree().classpathFiles();
 			for (File f : files) {
@@ -271,9 +270,14 @@ public class Corvoid {
 		File outFile = new File(target(), model.getArtifactId() + "-" + model.getVersion() + ".jar");
 		ensureTargetExists();
 		try (JarWriter jar = new JarWriter(new FileOutputStream(outFile))) {
-			for (File dir : dirsToIncludeInJar()) {
-				jar.putDirContents(dir);
-			}
+			writeJarContents(model, jar);
+		}
+	}
+
+	private void writeJarContents(Model model, JarWriter jar) throws IOException {
+		jar.writeManifest(model.getBuild().getMainClass());
+		for (File dir : dirsToIncludeInJar()) {
+			jar.putDirContents(dir);
 		}
 	}
 

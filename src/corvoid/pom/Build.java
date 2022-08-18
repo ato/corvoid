@@ -227,5 +227,14 @@ public class Build {
     public List<Plugin> getPlugins() {
         return plugins;
     }
+
+    public String getMainClass() {
+        for (Plugin plugin : getPlugins()) {
+            if (plugin.hasId("org.apache.maven.plugins", "maven-jar-plugin")) {
+                return plugin.getConfiguration().get("archive.manifest.mainClass");
+            }
+        }
+        return null;
+    }
 }
 

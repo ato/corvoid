@@ -1,6 +1,7 @@
 package corvoid;
 
 import java.io.*;
+import java.nio.charset.StandardCharsets;
 import java.util.Enumeration;
 import java.util.HashSet;
 import java.util.Objects;
@@ -9,6 +10,7 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 import java.util.zip.ZipOutputStream;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.util.Objects.requireNonNull;
 
 class JarWriter implements Closeable {
@@ -73,6 +75,16 @@ class JarWriter implements Closeable {
             }
             out.closeEntry();
         }
+    }
+
+    public void writeManifest(String mainClass) throws IOException {
+        String name = "META-INF/MANIFEST.MF";
+        String content = "Manifest-Version: 1.0\n";
+        if (mainClass != null) content += "Main-Class: " + mainClass + "\n";
+        seen.add(name);
+        out.putNextEntry(new ZipEntry(name));
+        out.write(content.getBytes(UTF_8));
+        out.closeEntry();
     }
 
     @Override
