@@ -547,17 +547,25 @@ public class Corvoid {
 	}
 
 	private void run(String[] args) throws XMLStreamException, IOException {
-		if (args.length < 2) {
-			System.err.println("Usage: corvoid run main-class args...");
-			System.exit(1);
-		}
 		DependencyTree tree = tree();
 		String classpath = tree.classpath();
 		List<String> command = new ArrayList<>();
 		command.add("java");
 		command.add("-cp");
 		command.add("target/classes:" + classpath);
-		command.addAll(Arrays.asList(args).subList(1, args.length));
+		if (args.length > 1 && !args[1].equals("--")) {
+			command.addAll(Arrays.asList(args).subList(1, args.length));
+		} else {
+			Model model = parseModel();
+			String mainClass = model.getBuild().getMainClass();
+			if (mainClass == null) {
+				System.err.println("No main class specified in pom.xml");
+				System.err.println("Use: corvoid run <main-class> args...");
+				System.exit(1);
+			}
+			command.add(mainClass);
+			if (args.length > 1) command.addAll(Arrays.asList(args).subList(2, args.length));
+		}
 		try {
 			new ProcessBuilder().command(command)
 			.redirectError(Redirect.INHERIT)
