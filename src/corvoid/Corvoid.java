@@ -139,7 +139,7 @@ public class Corvoid {
 		System.out.println("  jar        - build a jar file of classes and resources");
 		System.out.println("  lint       - check for common problems");
 		System.out.println("  new        - create a new project");
-		System.out.println("  tree       - print a dependency tree");
+		System.out.println("  tree [-s]  - print a dependency tree");
 		System.out.println("  run        - run a class");
 		System.out.println("  uberjar    - build a standalone jar file");
 		System.out.println("  watch      - watch for changes and recompile when seen");

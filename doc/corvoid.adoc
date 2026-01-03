@@ -45,8 +45,9 @@ COMMANDS
 *corvoid run <class> [arguments...]*::
     Execute the 'main()' method of a class.
 
-*corvoid tree*::
-    Display the project's dependencies as a tree.
+*corvoid tree [-s]*::
+    Display the project's dependencies as a tree. If the -s option is
+    given, the dependencies are sorted by size.
 
 *corvoid uberjar*::
     Build a standalone executable jar file bundling the project's dependencies.
