@@ -25,6 +25,7 @@ public class DependencyTree {
 		Future<Model> future;
 		Dependency source;
 		List<Node> children;
+		private long totalSize = -1;
 		
 		public Model getModel() {
 			return model;
@@ -89,31 +90,65 @@ public class DependencyTree {
 			}
 		}
 
-		/* by aioobe http://stackoverflow.com/a/3758880 */
+		/* based on aioobe's http://stackoverflow.com/a/3758880 */
 		public String formatBytes(long bytes) {
 			int unit = 1024;
-			if (bytes < unit) return bytes + " B";
+			if (bytes < unit) return String.format("%3d   B", bytes);
 			int exp = (int) (Math.log(bytes) / Math.log(unit));
-			char pre = "KMGTPE".charAt(exp-1);
-			return String.format("%.1f %sB", bytes / Math.pow(unit, exp), pre);
+			char pre = "KMGTPE".charAt(exp - 1);
+			double val = bytes / Math.pow(unit, exp);
+			if (val < 10) {
+				return String.format("%3.1f %cB", val, pre);
+			} else {
+				return String.format("%3.0f %cB", val, pre);
+			}
+		}
+
+		long totalSize() {
+			if (totalSize < 0) {
+				long total = 0;
+				File path = artifactPath();
+				if (path != null && path.exists()) {
+					total += path.length();
+				}
+				for (Node child : children) {
+					total += child.totalSize();
+				}
+				totalSize = total;
+			}
+			return totalSize;
 		}
 		
-		void print(PrintStream out) {
-			StringBuilder indent = new StringBuilder();
-			for (int i = 0; i < depth; i++) {
-				indent.append("  ");
-			}
-			File path = artifactPath();
+		void print(PrintStream out, String prefix, boolean isLast, long rootTotal, boolean sort) {
 			String cs;
-			if (model.getArtifactId().equals(model.getGroupId())) {
-				cs = String.format("%s%s %s", indent, model.getArtifactId(), version());
-			} else {
-				cs = String.format("%s%s:%s %s", indent, model.getGroupId(), model.getArtifactId(), version());
+			String currentPrefix = "";
+			String nextPrefix = "";
+			if (depth > 0) {
+				currentPrefix = prefix + (isLast ? "└── " : "├── ");
+				nextPrefix = prefix + (isLast ? "    " : "│   ");
 			}
-			if (path != null && path.exists()) {
-				out.format("%-60s %8s\n", cs, formatBytes(path.length()));
+			
+			if (model.getArtifactId().equals(model.getGroupId())) {
+				cs = String.format("%s%s %s", currentPrefix, model.getArtifactId(), version());
 			} else {
-				out.format("%s\n", cs);
+				cs = String.format("%s%s:%s %s", currentPrefix, model.getGroupId(), model.getArtifactId(), version());
+			}
+			long nodeTotal = totalSize();
+			String totalSizeStr = formatBytes(nodeTotal);
+			double percentValue = 100.0 * nodeTotal / rootTotal;
+			String percent = rootTotal > 0 ? String.format(percentValue < 10.0 ? "%.1f%%" : "%.0f%%", percentValue) : (rootTotal == 0 && nodeTotal == 0 && depth == 0 ? "100.0%" : "");
+
+			File path = artifactPath();
+			if (path != null && path.exists()) {
+				out.format("%-60s %8s %8s %6s\n", cs, formatBytes(path.length()), totalSizeStr, percent);
+			} else {
+				out.format("%-60s %8s %8s %6s\n", cs, "", totalSizeStr, percent);
+			}
+
+			if (sort) children.sort(Comparator.comparing(Node::totalSize).reversed());
+
+			for (int i = 0; i < children.size(); i++) {
+				children.get(i).print(out, nextPrefix, i == children.size() - 1, rootTotal, sort);
 			}
 		}
 
@@ -122,7 +157,10 @@ public class DependencyTree {
 		}
 
 		String version() {
-			return versions.get(coord());
+			if (model == null) return null;
+			String v = versions.get(coord());
+			if (v == null) return model.getVersion();
+			return v;
 		}
 
 		File artifactPath() {
@@ -179,15 +217,11 @@ public class DependencyTree {
 		return String.join(":", classpathStrings());
 	}
 	
-	private void print(Node node, PrintStream out) {
-		node.print(out);
-		for (Node child: node.children) {
-			print(child, out);
+	public void print(PrintStream out, boolean sort) {
+		out.format("%-60s %8s %8s %6s\n", "Artifact", "Size", "Total", "%");
+		if (root != null) {
+			root.print(out, "", true, root.totalSize(), sort);
 		}
-	}
-	
-	public void print(PrintStream out) {
-		print(root, out);
 		if (!unconstrained.isEmpty()) {
 			out.println("\nUnconstrained:");
 			for (Coord coord : unconstrained) {

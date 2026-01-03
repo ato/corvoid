@@ -154,7 +154,7 @@ public class Corvoid {
 			case "clean": clean(); break;
 			case "classpath": System.out.println(tree().classpath()); break;
 			case "deps": tree().fetchDependencies(); break;
-			case "tree": tree().print(System.out); break;
+			case "tree": tree().print(System.out, args.length > 1 && "-s".equals(args[1])); break;
 			case "compile": compile(); break;
 			case "run": run(args); break;
 			case "jar": jar(); break;
