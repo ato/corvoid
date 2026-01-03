@@ -68,6 +68,7 @@ class Cache {
 			HttpRequest request = HttpRequest.newBuilder().uri(uri).build();
 			Path tmpFile = Path.of(path + ".tmp");
 			try {
+				System.out.println("Fetching " + uri);
 				HttpResponse<Path> response = httpClient.send(request, HttpResponse.BodyHandlers.ofFile(tmpFile));
 				if (response.statusCode() == 200) {
 					Files.move(tmpFile, path, StandardCopyOption.REPLACE_EXISTING);
@@ -133,7 +134,7 @@ class Cache {
 				}
 			}
 		}
-		return latest.toString();
+		return latest == null ? null : latest.toString();
 	}
 
 	Model readProject(Coord coord, String version) throws XMLStreamException, IOException {

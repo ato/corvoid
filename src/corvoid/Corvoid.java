@@ -116,39 +116,19 @@ public class Corvoid {
 		String artifactId = parts[1];
 
 		Model model = parseModel();
-		Dependency existing = null;
-		for (Dependency d : model.getDependencies()) {
-			if (groupId.equals(d.getGroupId()) && artifactId.equals(d.getArtifactId())) {
-				existing = d;
-				break;
-			}
-		}
-
-		String dependencyXml = String.format(
-				"    <dependency>%n" +
-				"            <groupId>%s</groupId>%n" +
-				"            <artifactId>%s</artifactId>%n" +
-				"            <version>%s</version>%n" +
-				"        </dependency>%n    ",
-				groupId, artifactId, version
-		);
-
+		Dependency existing = findDependency(model, groupId, artifactId);
 
 		if (existing != null) {
-			System.out.println("Updating dependency " + groupId + ":" + artifactId + " from " + existing.getVersion() +
-							   " to " + version);
-			if (existing.versionStartOffset >= 0 && existing.versionEndOffset >= 0) {
-				// Replace existing <version>...</version>
-				splicePom(existing.versionStartOffset, "<version>" + version + "</version>",
-						existing.versionEndOffset - existing.versionStartOffset);
-			} else if (existing.artifactIdEndOffset >= 0) {
-				// Insert <version> after <artifactId>
-				splicePom(existing.artifactIdEndOffset, "\n            <version>" + version + "</version>", 0);
-			} else {
-				// Fallback: replace whole <dependency> block
-				splicePom(existing.startOffset, dependencyXml, existing.endOffset - existing.startOffset);
-			}
+			updateDependency(existing, version);
 		} else {
+			String dependencyXml = String.format(
+					"    <dependency>%n" +
+					"            <groupId>%s</groupId>%n" +
+					"            <artifactId>%s</artifactId>%n" +
+					"            <version>%s</version>%n" +
+					"        </dependency>%n    ",
+					groupId, artifactId, version
+			);
 			System.out.println("Adding dependency " + groupId + ":" + artifactId + " with version " + version);
 			// Insert at end of dependencies
 			int insertPosition = model.dependenciesEndOffset >= 0 ? model.dependenciesEndOffset : model.projectEndOffset;
@@ -156,13 +136,57 @@ public class Corvoid {
 		}
 	}
 
+	private Dependency findDependency(Model model, String groupId, String artifactId) {
+		for (Dependency d : model.getDependencies()) {
+			if (groupId.equals(d.getGroupId()) && artifactId.equals(d.getArtifactId())) {
+				return d;
+			}
+		}
+		if (model.getDependencyManagement() != null) {
+			for (Dependency d : model.getDependencyManagement().getDependencies()) {
+				if (groupId.equals(d.getGroupId()) && artifactId.equals(d.getArtifactId())) {
+					return d;
+				}
+			}
+		}
+		return null;
+	}
+
+	private void updateDependency(Dependency existing, String version) throws IOException {
+		System.out.println("Updating dependency " + existing.getGroupId() + ":" + existing.getArtifactId() + " from " + existing.getVersion() +
+						   " to " + version);
+		if (existing.versionStartOffset >= 0 && existing.versionEndOffset >= 0) {
+			// Replace existing <version>...</version>
+			splicePom(existing.versionStartOffset, "<version>" + version + "</version>",
+					existing.versionEndOffset - existing.versionStartOffset);
+		} else if (existing.artifactIdEndOffset >= 0) {
+			// Insert <version> after <artifactId>
+			splicePom(existing.artifactIdEndOffset, "\n            <version>" + version + "</version>", 0);
+		} else {
+			// Fallback: replace whole <dependency> block
+			String dependencyXml = String.format(
+					"    <dependency>%n" +
+					"            <groupId>%s</groupId>%n" +
+					"            <artifactId>%s</artifactId>%n" +
+					"            <version>%s</version>%n" +
+					"        </dependency>%n    ",
+					existing.getGroupId(), existing.getArtifactId(), version
+			);
+			splicePom(existing.startOffset, dependencyXml, existing.endOffset - existing.startOffset);
+		}
+	}
+
 	private void splicePom(int offset, String insert, long skip) throws IOException {
 		Path pom = projectRoot.resolve("pom.xml");
 		Path tmp = projectRoot.resolve("pom.xml.tmp");
-		byte[] buffer = new byte[8192];
+		char[] buffer = new char[8192];
 
-		try (var in = Files.newInputStream(pom);
-			 var out = Files.newOutputStream(tmp)) {
+		if (offset < 0) throw new IllegalArgumentException("offset must be >= 0");
+		if (skip < 0) throw new IllegalArgumentException("skip must be >= 0");
+		if (offset + skip > Files.size(pom)) throw new IllegalArgumentException("offset + skip must be <= file size");
+
+		try (var in = Files.newBufferedReader(pom);
+			 var out = Files.newBufferedWriter(tmp)) {
 
 			int remaining = offset;
 			int nread;
@@ -171,10 +195,12 @@ public class Corvoid {
 				remaining -= nread;
 			}
 
-			out.write(insert.getBytes(UTF_8));
+			out.write(insert);
 
 			while (skip > 0) {
-				skip -= in.skip(skip);
+				long n = in.skip(skip);
+				if (n == 0) throw new EOFException("Unexpected EOF");
+				skip -= n;
 			}
 
 			while ((nread = in.read(buffer)) >= 0) {
@@ -220,8 +246,8 @@ public class Corvoid {
 	}
 
 	public Model parseModel() throws XMLStreamException, FactoryConfigurationError, IOException {
-		try (InputStream in = Files.newInputStream(projectRoot.resolve("pom.xml"))) {
-			XMLStreamReader xml = XMLInputFactory.newInstance().createXMLStreamReader(new StreamSource(in));
+		try (var in = Files.newBufferedReader(projectRoot.resolve("pom.xml"))) {
+			XMLStreamReader xml = XMLInputFactory.newInstance().createXMLStreamReader(in);
 			xml.nextTag();
 			return new Model(xml);
 		}
@@ -244,6 +270,7 @@ public class Corvoid {
 		System.out.println("  search     - search Maven Central for artifacts");
 		System.out.println("  tree [-s]  - print a dependency tree");
 		System.out.println("  uberjar    - build a standalone jar file");
+		System.out.println("  update     - update dependencies to latest stable versions");
 		System.out.println("  watch      - watch for changes and recompile when seen");
 		System.exit(1);
 	}
@@ -266,6 +293,7 @@ public class Corvoid {
 			case "watch": watch(); break;
 			case "lint": lint(); break;
 			case "outdated": outdated(); break;
+			case "update": update(args); break;
 			default: usage();
 		}
 	}
@@ -331,6 +359,73 @@ public class Corvoid {
 		Collections.sort(results);
 		for (String res : results) {
 			System.out.println(res);
+		}
+	}
+
+	public void update(String[] args) throws XMLStreamException, IOException {
+		Set<String> toUpdate = new HashSet<>(Arrays.asList(args).subList(1, args.length));
+
+		// Pass 1: Update dependencyManagement
+		Model model = parseModel();
+		Interpolator.interpolate(model);
+		if (model.getDependencyManagement() != null) {
+			record Update(Dependency dep, String version) {}
+			List<Update> updates = new ArrayList<>();
+			for (Dependency dep : model.getDependencyManagement().getDependencies()) {
+				String coordStr = dep.getGroupId() + ":" + dep.getArtifactId();
+				if (toUpdate.isEmpty() || toUpdate.contains(coordStr)) {
+					try {
+						Coord coord = new Coord(dep.getGroupId(), dep.getArtifactId());
+						String version = dep.getVersion();
+						String latest = cache.latestVersion(coord);
+						if (latest != null && !latest.equals(version)) {
+							updates.add(new Update(dep, latest));
+						}
+					} catch (Exception e) {
+						System.err.println("Error updating " + coordStr + ": " + e.getMessage());
+					}
+				}
+			}
+			if (!updates.isEmpty()) {
+				updates.sort(Comparator.comparingInt((Update u) -> u.dep.startOffset).reversed());
+				for (Update u : updates) {
+					updateDependency(u.dep, u.version);
+				}
+			}
+		}
+
+		// Pass 2: Update dependencies
+		model = parseModel();
+		Interpolator.interpolate(model);
+		cache.resolveImports(model);
+
+		record Update(Dependency dep, String version) {}
+		List<Update> updates = new ArrayList<>();
+
+		for (Dependency dep : model.getDependencies()) {
+			String coordStr = dep.getGroupId() + ":" + dep.getArtifactId();
+			if (toUpdate.isEmpty() || toUpdate.contains(coordStr)) {
+				try {
+					Coord coord = new Coord(dep.getGroupId(), dep.getArtifactId());
+					String version = dep.getVersion();
+					if (version == null) {
+						version = model.findManagedVersion(dep);
+					}
+					String latest = cache.latestVersion(coord);
+					if (latest != null && !latest.equals(version)) {
+						updates.add(new Update(dep, latest));
+					}
+				} catch (Exception e) {
+					System.err.println("Error updating " + coordStr + ": " + e.getMessage());
+				}
+			}
+		}
+
+		if (!updates.isEmpty()) {
+			updates.sort(Comparator.comparingInt((Update u) -> u.dep.startOffset).reversed());
+			for (Update u : updates) {
+				updateDependency(u.dep, u.version);
+			}
 		}
 	}
 
