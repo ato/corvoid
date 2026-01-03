@@ -39,6 +39,8 @@ public class Model {
     private DependencyManagement dependencyManagement = new DependencyManagement();
     private DistributionManagement distributionManagement = new DistributionManagement();
     private Map<String,String> properties = new HashMap<>();
+    public Integer endOfProject;
+    public Integer endOfDependencies;
 
     public Model() {}
 
@@ -197,6 +199,7 @@ public class Model {
                             throw new XMLStreamException("Expected <dependency> but got: " + xml.getLocalName(), xml.getLocation());
                         }
                     }
+                    endOfDependencies = xml.getLocation().getCharacterOffset() - "</dependencies>".length();
                     break;
                 }
                 case "reports": {
@@ -232,6 +235,7 @@ public class Model {
                 }
             }
         }
+        endOfProject = xml.getLocation().getCharacterOffset() - "</project>".length();
     }
 
     public Model(Model model1, Model model2) {

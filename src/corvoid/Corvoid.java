@@ -88,6 +88,53 @@ public class Corvoid {
 		return buf.toString();
 	}
 	
+	public void add(String dependency, String version) throws IOException, XMLStreamException {
+		String[] parts = dependency.split(":");
+		if (parts.length != 2) {
+			System.err.println("Invalid dependency: " + dependency + ". Expected groupId:artifactId");
+			System.exit(1);
+		}
+		String groupId = parts[0];
+		String artifactId = parts[1];
+
+		Model model = parseModel();
+		System.out.println("Adding dependency " + groupId + ":" + artifactId + " with version " + version);
+		System.out.println("Model end of dependencies: " + model.endOfDependencies);
+		
+		try (var in = new FileInputStream("pom.xml");
+			var out = new FileOutputStream("pom.xml.tmp")) {
+			int insertPosition = model.endOfDependencies != null ? model.endOfDependencies : model.endOfProject;
+
+			// 1. copy file up to insert position
+			byte[] buffer = new byte[8192];
+			int remaining = insertPosition;
+			int nread;
+			while ((nread = in.read(buffer, 0, Math.min(buffer.length, remaining))) > 0) {
+				out.write(buffer, 0, nread);
+				remaining -= nread;
+			}
+
+			// 2. insert dependency
+			String dependencyXml = String.format(
+					"    <dependency>%n" +
+					"            <groupId>%s</groupId>%n" +
+					"            <artifactId>%s</artifactId>%n" +
+					"            <version>%s</version>%n" +
+					"        </dependency>%n    ",
+					groupId, artifactId, version
+			);
+			out.write(dependencyXml.getBytes(UTF_8));
+
+			// 3. copy rest of file
+			while ((nread = in.read(buffer)) >= 0) {
+				out.write(buffer, 0, nread);
+			}
+		}
+
+		// Replace original file with modified version
+		Files.move(Path.of("pom.xml.tmp"), Path.of("pom.xml"), StandardCopyOption.REPLACE_EXISTING);
+	}
+
 	public void newProject(String name) throws IOException {
 		File projectDir = new File(name);
 		if (projectDir.exists()) {
@@ -135,6 +182,7 @@ public class Corvoid {
 		System.out.println("corvoid COMMAND");
 		System.out.println("Fetch dependencies and build Java projects");
 		System.out.println("\nCommands:");
+		System.out.println("  add        - add a dependency to pom.xml");
 		System.out.println("  classpath  - print the project's classpath");
 		System.out.println("  clean      - delete the build target directory");
 		System.out.println("  compile    - compile the project");
@@ -142,9 +190,9 @@ public class Corvoid {
 		System.out.println("  jar        - build a jar file of classes and resources");
 		System.out.println("  lint       - check for common problems");
 		System.out.println("  new        - create a new project");
+		System.out.println("  run        - run a class");
 		System.out.println("  search     - search Maven Central for artifacts");
 		System.out.println("  tree [-s]  - print a dependency tree");
-		System.out.println("  run        - run a class");
 		System.out.println("  uberjar    - build a standalone jar file");
 		System.out.println("  watch      - watch for changes and recompile when seen");
 		System.exit(1);
@@ -154,6 +202,7 @@ public class Corvoid {
 		if (args.length == 0)
 			usage();
 		switch (args[0]) {
+			case "add": add(args[1], args[2]); break;
 			case "new": newProject(args[1]); break;
 			case "clean": clean(); break;
 			case "classpath": System.out.println(tree().classpath()); break;
