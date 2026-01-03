@@ -8,11 +8,11 @@ import static org.junit.Assert.*;
 public class AddTest {
     @Test
     public void testAddDuplicateDependency() throws Exception {
-        File tempDir = Files.createTempDirectory("corvoid-test").toFile();
+        Path tempDir = Files.createTempDirectory("corvoid-test");
         try {
             Corvoid corvoid = new Corvoid(tempDir);
-            File pom = new File(tempDir, "pom.xml");
-            Files.writeString(pom.toPath(), 
+            Path pom = tempDir.resolve("pom.xml");
+            Files.writeString(pom, 
                 "<project>\n" +
                 "    <dependencies>\n" +
                 "        <dependency>\n" +
@@ -25,7 +25,7 @@ public class AddTest {
             
             corvoid.add("org.example:example-art", "2.0");
             
-            String content = Files.readString(pom.toPath());
+            String content = Files.readString(pom);
             // It should update 1.0 to 2.0 and NOT add a second dependency block
             assertTrue("Should contain version 2.0", content.contains("<version>2.0</version>"));
             assertFalse("Should not contain version 1.0", content.contains("<version>1.0</version>"));
@@ -40,11 +40,11 @@ public class AddTest {
 
     @Test
     public void testUpdatePreservesOtherTags() throws Exception {
-        File tempDir = Files.createTempDirectory("corvoid-test").toFile();
+        Path tempDir = Files.createTempDirectory("corvoid-test");
         try {
             Corvoid corvoid = new Corvoid(tempDir);
-            File pom = new File(tempDir, "pom.xml");
-            Files.writeString(pom.toPath(), 
+            Path pom = tempDir.resolve("pom.xml");
+            Files.writeString(pom, 
                 "<project>\n" +
                 "    <dependencies>\n" +
                 "        <dependency>\n" +
@@ -59,7 +59,7 @@ public class AddTest {
             
             corvoid.add("org.example:example-art", "2.0");
             
-            String content = Files.readString(pom.toPath());
+            String content = Files.readString(pom);
             assertTrue("Should contain version 2.0", content.contains("<version>2.0</version>"));
             assertTrue("Should preserve scope", content.contains("<scope>test</scope>"));
             assertTrue("Should preserve classifier", content.contains("<classifier>sources</classifier>"));
@@ -70,11 +70,11 @@ public class AddTest {
 
     @Test
     public void testUpdateDependencyWithoutVersionTag() throws Exception {
-        File tempDir = Files.createTempDirectory("corvoid-test").toFile();
+        Path tempDir = Files.createTempDirectory("corvoid-test");
         try {
             Corvoid corvoid = new Corvoid(tempDir);
-            File pom = new File(tempDir, "pom.xml");
-            Files.writeString(pom.toPath(), 
+            Path pom = tempDir.resolve("pom.xml");
+            Files.writeString(pom, 
                 "<project>\n" +
                 "    <dependencies>\n" +
                 "        <dependency>\n" +
@@ -87,7 +87,7 @@ public class AddTest {
             
             corvoid.add("org.example:example-art", "2.0");
             
-            String content = Files.readString(pom.toPath());
+            String content = Files.readString(pom);
             assertTrue("Should contain version 2.0", content.contains("<version>2.0</version>"));
             // Fallback logic currently loses scope if no version tag was present
             // but let's see what happens.
@@ -98,11 +98,11 @@ public class AddTest {
 
     @Test
     public void testAddNewDependency() throws Exception {
-        File tempDir = Files.createTempDirectory("corvoid-test").toFile();
+        Path tempDir = Files.createTempDirectory("corvoid-test");
         try {
             Corvoid corvoid = new Corvoid(tempDir);
-            File pom = new File(tempDir, "pom.xml");
-            Files.writeString(pom.toPath(), 
+            Path pom = tempDir.resolve("pom.xml");
+            Files.writeString(pom, 
                 "<project>\n" +
                 "    <dependencies>\n" +
                 "        <dependency>\n" +
@@ -115,7 +115,7 @@ public class AddTest {
             
             corvoid.add("org.other:other-art", "1.5");
             
-            String content = Files.readString(pom.toPath());
+            String content = Files.readString(pom);
             assertTrue("Should contain original dependency", content.contains("example-art"));
             assertTrue("Should contain original version", content.contains("<version>1.0</version>"));
             assertTrue("Should contain new dependency", content.contains("other-art"));
@@ -129,13 +129,19 @@ public class AddTest {
         }
     }
 
-    private void deleteDirectory(File directory) {
-        File[] allContents = directory.listFiles();
-        if (allContents != null) {
-            for (File file : allContents) {
-                deleteDirectory(file);
+    private void deleteDirectory(Path directory) throws IOException {
+        Files.walkFileTree(directory, new SimpleFileVisitor<Path>() {
+            @Override
+            public FileVisitResult visitFile(Path file, java.nio.file.attribute.BasicFileAttributes attrs) throws IOException {
+                Files.delete(file);
+                return FileVisitResult.CONTINUE;
             }
-        }
-        directory.delete();
+
+            @Override
+            public FileVisitResult postVisitDirectory(Path dir, IOException exc) throws IOException {
+                Files.delete(dir);
+                return FileVisitResult.CONTINUE;
+            }
+        });
     }
 }

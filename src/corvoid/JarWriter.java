@@ -1,17 +1,17 @@
 package corvoid;
 
 import java.io.*;
-import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Enumeration;
 import java.util.HashSet;
-import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Stream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 import java.util.zip.ZipOutputStream;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
-import static java.util.Objects.requireNonNull;
 
 class JarWriter implements Closeable {
     private final byte[] buffer = new byte[65536];
@@ -47,30 +47,32 @@ class JarWriter implements Closeable {
         }
     }
 
-    public void put(File file) throws IOException {
+    public void put(Path file) throws IOException {
         put(file, "");
     }
 
-    public void putDirContents(File dir) throws IOException {
+    public void putDirContents(Path dir) throws IOException {
         putDirContents(dir, "");
     }
 
-    private void putDirContents(File dir, String prefix) throws IOException {
-        for (File file : requireNonNull(dir.listFiles())) {
-            put(file, prefix);
+    private void putDirContents(Path dir, String prefix) throws IOException {
+        try (Stream<Path> list = Files.list(dir)) {
+            for (Path file : (Iterable<Path>) list::iterator) {
+                put(file, prefix);
+            }
         }
     }
 
-    private void put(File file, String prefix) throws IOException {
-        if (file.isDirectory()) {
-            putDirContents(file, prefix + file.getName() + "/");
-        } else if (file.isFile()) {
-            String path = prefix + file.getName();
+    private void put(Path file, String prefix) throws IOException {
+        if (Files.isDirectory(file)) {
+            putDirContents(file, prefix + file.getFileName().toString() + "/");
+        } else if (Files.isRegularFile(file)) {
+            String path = prefix + file.getFileName().toString();
             if (!seen.add(path)) {
                 return;
             }
             out.putNextEntry(new ZipEntry(path));
-            try (FileInputStream in = new FileInputStream(file)) {
+            try (InputStream in = Files.newInputStream(file)) {
                 copyStream(in, out);
             }
             out.closeEntry();

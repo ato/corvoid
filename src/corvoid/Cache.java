@@ -19,31 +19,31 @@ import java.util.ArrayList;
 import java.util.List;
 
 class Cache {
-	private final File root;
+	private final Path root;
 	final HttpClient httpClient = HttpClient.newHttpClient();
 
-	Cache(File root) {
+	Cache(Path root) {
         if (root == null) {
-			root = new File(new File(System.getProperty("user.home"), ".m2"), "repository");
+			root = Path.of(System.getProperty("user.home"), ".m2", "repository");
 		}
 		this.root = root;
     }
 
-	private File groupDir(String groupId) {
-		return new File(root, groupId.replace('.', '/'));
+	private Path groupDir(String groupId) {
+		return root.resolve(groupId.replace('.', '/'));
 	}
 
-	private File artifactDir(Coord coord) {
-		return new File(groupDir(coord.groupId), coord.artifactId);
+	private Path artifactDir(Coord coord) {
+		return groupDir(coord.groupId).resolve(coord.artifactId);
 	}
 	
-	private File artifactDir(Coord coord, String version) {
-		return new File(artifactDir(coord), version);
+	private Path artifactDir(Coord coord, String version) {
+		return artifactDir(coord).resolve(version);
 	}
 
-	public File artifactPath(Coord coord, String version, String classifier, String type) {
+	public Path artifactPath(Coord coord, String version, String classifier, String type) {
 		type = type == null ? "jar" : type;
-		return new File(artifactDir(coord, version), coord.artifactId + "-" + version +
+		return artifactDir(coord, version).resolve(coord.artifactId + "-" + version +
 				(classifier != null ? "-" + classifier : "") + "." + type);
 	}
 	
@@ -52,26 +52,26 @@ class Cache {
 		return URI.create("https://repo1.maven.org/maven2/" + coord.groupId.replace('.', '/') + "/" + coord.artifactId + "/" + version + "/" + coord.artifactId + "-" + version + "." + type);
 	}
 
-	public File metadataPath(Coord coord) {
-		return new File(artifactDir(coord), "maven-metadata-central.xml");
+	public Path metadataPath(Coord coord) {
+		return artifactDir(coord).resolve("maven-metadata-central.xml");
 	}
 
 	private URI metadataUri(Coord coord) {
 		return URI.create("https://repo1.maven.org/maven2/" + coord.groupId.replace('.', '/') + "/" + coord.artifactId + "/maven-metadata.xml");
 	}
 
-	public File fetchMetadata(Coord coord) throws IOException {
-		File path = metadataPath(coord);
-		if (!path.exists() || System.currentTimeMillis() - path.lastModified() > 24 * 60 * 60 * 1000) {
+	public Path fetchMetadata(Coord coord) throws IOException {
+		Path path = metadataPath(coord);
+		if (!Files.exists(path) || System.currentTimeMillis() - Files.getLastModifiedTime(path).toMillis() > 24 * 60 * 60 * 1000) {
 			URI uri = metadataUri(coord);
-			Files.createDirectories(path.getParentFile().toPath());
+			Files.createDirectories(path.getParent());
 			HttpRequest request = HttpRequest.newBuilder().uri(uri).build();
 			Path tmpFile = Path.of(path + ".tmp");
 			try {
 				HttpResponse<Path> response = httpClient.send(request, HttpResponse.BodyHandlers.ofFile(tmpFile));
 				if (response.statusCode() == 200) {
-					Files.move(tmpFile, path.toPath(), StandardCopyOption.REPLACE_EXISTING);
-				} else if (response.statusCode() != 404 || !path.exists()) {
+					Files.move(tmpFile, path, StandardCopyOption.REPLACE_EXISTING);
+				} else if (response.statusCode() != 404 || !Files.exists(path)) {
 					throw new IOException("Unexpected status code: " + response.statusCode() + " for " + uri);
 				}
 			} catch (InterruptedException e) {
@@ -84,9 +84,9 @@ class Cache {
 		return path;
 	}
 	
-	public File fetch(Coord coord, String version, String classifier, String type) throws IOException {
+	public Path fetch(Coord coord, String version, String classifier, String type) throws IOException {
 		URI uri = artifactUri(coord, version, type);
-		Path path = artifactPath(coord, version, classifier, type).toPath();
+		Path path = artifactPath(coord, version, classifier, type);
 		if (!Files.exists(path)) {
 			Files.createDirectories(path.getParent());
 
@@ -106,16 +106,16 @@ class Cache {
 				Files.deleteIfExists(tmpFile);
 			}
 		}
-		return path.toFile();
+		return path;
 	}
 	
 	String latestVersion(Coord coord) throws IOException, XMLStreamException {
-		File path = fetchMetadata(coord);
-		if (!path.exists()) {
+		Path path = fetchMetadata(coord);
+		if (!Files.exists(path)) {
 			return null;
 		}
 		List<String> versions = new ArrayList<>();
-		try (InputStream in = new FileInputStream(path)) {
+		try (InputStream in = Files.newInputStream(path)) {
 			XMLStreamReader xml = XMLInputFactory.newInstance().createXMLStreamReader(new StreamSource(in));
 			while (xml.hasNext()) {
 				int event = xml.next();
@@ -137,8 +137,8 @@ class Cache {
 	}
 
 	Model readProject(Coord coord, String version) throws XMLStreamException, IOException {
-		File path = fetch(coord, version, null, "pom");
-		try (InputStream in = new FileInputStream(path)) {
+		Path path = fetch(coord, version, null, "pom");
+		try (InputStream in = Files.newInputStream(path)) {
 			XMLStreamReader xml = XMLInputFactory.newInstance().createXMLStreamReader(new StreamSource(in));
 			xml.nextTag();
 			return new Model(xml);

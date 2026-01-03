@@ -25,6 +25,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Stream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
@@ -34,20 +35,28 @@ import static java.util.Objects.requireNonNull;
 
 public class Corvoid {
 	
-	final File projectRoot;
+	final Path projectRoot;
 	private final Cache cache;
 
 	public Corvoid() {
-		this(new File(System.getProperty("user.dir")), null);
+		this(Path.of(System.getProperty("user.dir")), null);
 	}
 
-	public Corvoid(File projectRoot) {
+	public Corvoid(Path projectRoot) {
 		this(projectRoot, null);
 	}
 
-	public Corvoid(File projectRoot, File repositoryRoot) {
+	public Corvoid(File projectRoot) {
+		this(projectRoot.toPath(), null);
+	}
+
+	public Corvoid(Path projectRoot, Path repositoryRoot) {
 		this.projectRoot = projectRoot;
 		this.cache = new Cache(repositoryRoot);
+	}
+
+	public Corvoid(File projectRoot, File repositoryRoot) {
+		this(projectRoot.toPath(), repositoryRoot == null ? null : repositoryRoot.toPath());
 	}
 
 	private String skeletonPom() throws IOException {
@@ -80,8 +89,8 @@ public class Corvoid {
 		return superPom;
 	}
 
-	private File target() {
-		return new File(projectRoot, "target");
+	private Path target() {
+		return projectRoot.resolve("target");
 	}
 	
 	static String capify(String name) {
@@ -148,12 +157,12 @@ public class Corvoid {
 	}
 
 	private void splicePom(int offset, String insert, long skip) throws IOException {
-		File pom = new File(projectRoot, "pom.xml");
-		File tmp = new File(projectRoot, "pom.xml.tmp");
+		Path pom = projectRoot.resolve("pom.xml");
+		Path tmp = projectRoot.resolve("pom.xml.tmp");
 		byte[] buffer = new byte[8192];
 
-		try (var in = new FileInputStream(pom);
-			 var out = new FileOutputStream(tmp)) {
+		try (var in = Files.newInputStream(pom);
+			 var out = Files.newOutputStream(tmp)) {
 
 			int remaining = offset;
 			int nread;
@@ -173,34 +182,31 @@ public class Corvoid {
 			}
 		}
 
-		Files.move(tmp.toPath(), pom.toPath(), StandardCopyOption.REPLACE_EXISTING);
+		Files.move(tmp, pom, StandardCopyOption.REPLACE_EXISTING);
 	}
 
 	public void newProject(String name) throws IOException {
-		File projectDir = new File(name);
-		if (projectDir.exists()) {
+		Path projectDir = Path.of(name);
+		if (Files.exists(projectDir)) {
 			System.err.println(projectDir + " already exists");
 			System.exit(1);
 		}
-		File srcDir = new File(projectDir, "src");
-		File srcPkgDir = new File(srcDir, name.replace("-", ""));
-		File resDir = new File(projectDir, "resources");
+		Path srcDir = projectDir.resolve("src");
+		Path srcPkgDir = srcDir.resolve(name.replace("-", ""));
+		Path resDir = projectDir.resolve("resources");
 
-		projectDir.mkdir();
-		srcDir.mkdir();
-		resDir.mkdir();
-		srcPkgDir.mkdir();
-		new File(resDir, name).mkdir();
+		Files.createDirectories(srcPkgDir);
+		Files.createDirectories(resDir.resolve(name));
 		
-		File pom = new File(projectDir, "pom.xml");
-		try (Writer w = new FileWriter(pom)) {
+		Path pom = projectDir.resolve("pom.xml");
+		try (Writer w = Files.newBufferedWriter(pom)) {
 			w.write(skeletonPom()
 					.replace("$[name]", name));
 		}
 		
 		String mainClass = capify(name);
-		File mainClassFile = new File(srcPkgDir, mainClass + ".java");
-		try (Writer w = new FileWriter(mainClassFile)) {
+		Path mainClassFile = srcPkgDir.resolve(mainClass + ".java");
+		try (Writer w = Files.newBufferedWriter(mainClassFile)) {
 			w.write("package " + name + ";\n\npublic class " + mainClass + " {\n    public static void main(String args[]) {\n        System.out.println(\"Hello, world.\");\n    }\n}\n");
 		}
 	}
@@ -213,10 +219,12 @@ public class Corvoid {
 		return tree;
 	}
 
-	public Model parseModel() throws XMLStreamException, FactoryConfigurationError, FileNotFoundException {
-		XMLStreamReader xml = XMLInputFactory.newInstance().createXMLStreamReader(new StreamSource(new FileInputStream(new File(projectRoot, "pom.xml"))));
-		xml.nextTag();
-		return new Model(xml);
+	public Model parseModel() throws XMLStreamException, FactoryConfigurationError, IOException {
+		try (InputStream in = Files.newInputStream(projectRoot.resolve("pom.xml"))) {
+			XMLStreamReader xml = XMLInputFactory.newInstance().createXMLStreamReader(new StreamSource(in));
+			xml.nextTag();
+			return new Model(xml);
+		}
 	}
 
 	private void usage() {
@@ -327,7 +335,7 @@ public class Corvoid {
 	}
 
 	private void clean() throws IOException {
-		Files.walkFileTree(target().toPath(), new SimpleFileVisitor<Path>() {
+		Files.walkFileTree(target(), new SimpleFileVisitor<Path>() {
 			@Override
 			public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
 				Files.delete(file);
@@ -350,16 +358,16 @@ public class Corvoid {
 	private boolean lintDuplicateClasses() throws XMLStreamException, IOException {
 		boolean problems = false;
 		Map<String,String> classes = new HashMap<>();
-		for (File jarFile : tree().classpathFiles()) {
-			try (ZipFile zip = new ZipFile(jarFile)) {
+		for (Path jarPath : tree().classpathFiles()) {
+			try (ZipFile zip = new ZipFile(jarPath.toFile())) {
 				Enumeration<? extends ZipEntry> entries = zip.entries();
 				while (entries.hasMoreElements()) {
 					ZipEntry entry = entries.nextElement();
 					String name = entry.getName();
 					if (name.endsWith(".class")) {
-						String prev = classes.put(name, jarFile.getName());
+						String prev = classes.put(name, jarPath.getFileName().toString());
 						if (prev != null) {
-							System.out.println("Duplicate class: " + name + " (" + prev + ", " + jarFile.getName() + ")");
+							System.out.println("Duplicate class: " + name + " (" + prev + ", " + jarPath.getFileName().toString() + ")");
 							problems = true;
 						}
 					}
@@ -392,11 +400,11 @@ public class Corvoid {
 		System.out.print("\033[F\033[J");
 	}
 
-	List<File> dirsToIncludeInJar() {
-		List<File> dirs = new ArrayList<>();
+	List<Path> dirsToIncludeInJar() {
+		List<Path> dirs = new ArrayList<>();
 		for (String s : Arrays.asList("classes", "resources")) {
-			File dir = new File(target(), s);
-			if (dir.isDirectory()) {
+			Path dir = target().resolve(s);
+			if (Files.isDirectory(dir)) {
 				dirs.add(dir);
 			}
 		}
@@ -406,15 +414,15 @@ public class Corvoid {
 	void uberjar() throws IOException, XMLStreamException {
 		Model model = parseModel();
 		tree().fetchDependencies();
-		File uberjarFile = new File(target(), model.getArtifactId() + "-" + model.getVersion() + "-standalone.jar");
+		Path uberjarFile = target().resolve(model.getArtifactId() + "-" + model.getVersion() + "-standalone.jar");
 		ensureTargetExists();
-		try (JarWriter uberjar = new JarWriter(new FileOutputStream(uberjarFile))) {
+		try (JarWriter uberjar = new JarWriter(Files.newOutputStream(uberjarFile))) {
 			writeJarContents(model, uberjar);
 			int progress = 0;
-			List<File> files = tree().classpathFiles();
-			for (File f : files) {
-				System.out.println("Merging jars " + progressBar(progress++, files.size()) + " " + f.getName());
-				try (ZipFile zf = new ZipFile(f)) {
+			List<Path> files = tree().classpathFiles();
+			for (Path f : files) {
+				System.out.println("Merging jars " + progressBar(progress++, files.size()) + " " + f.getFileName().toString());
+				try (ZipFile zf = new ZipFile(f.toFile())) {
 					uberjar.putJarContents(zf);
 				}
 				clearLine();
@@ -423,14 +431,14 @@ public class Corvoid {
 	}
 
 	private void ensureTargetExists() throws IOException {
-		Files.createDirectories(target().toPath());
+		Files.createDirectories(target());
 	}
 
 	void jar() throws IOException, XMLStreamException {
 		Model model = parseModel();
-		File outFile = new File(target(), model.getArtifactId() + "-" + model.getVersion() + ".jar");
+		Path outFile = target().resolve(model.getArtifactId() + "-" + model.getVersion() + ".jar");
 		ensureTargetExists();
-		try (JarWriter jar = new JarWriter(new FileOutputStream(outFile))) {
+		try (JarWriter jar = new JarWriter(Files.newOutputStream(outFile))) {
 			writeJarContents(model, jar);
 		}
 	}
@@ -438,7 +446,7 @@ public class Corvoid {
 	private void writeJarContents(Model model, JarWriter jar) throws IOException, XMLStreamException {
 		compile();
 		jar.writeManifest(model.getBuild().getMainClass());
-		for (File dir : dirsToIncludeInJar()) {
+		for (Path dir : dirsToIncludeInJar()) {
 			jar.putDirContents(dir);
 		}
 	}
@@ -467,29 +475,22 @@ public class Corvoid {
 	}
 
 	private static class CompilerOptions {
-		File srcDir, outDir;
+		Path srcDir, outDir;
 		String classpath;
 		boolean verbose = false;
 		
-		List<File> walkSources(File srcDir) {
-			List<File> list = new ArrayList<>();
-			LinkedList<File> queue = new LinkedList<>();
-			queue.add(srcDir.getAbsoluteFile());
-			while (!queue.isEmpty()) {
-				File dir = queue.remove();
-				for (File file : requireNonNull(dir.listFiles())) {
-					if (file.isDirectory()) {
-						queue.add(file.getAbsoluteFile());
-					} else if (file.toString().endsWith(".java")) {
-						list.add(file);
-					}
-				}
+		List<Path> walkSources(Path srcDir) throws IOException {
+			List<Path> list = new ArrayList<>();
+			try (Stream<Path> stream = Files.walk(srcDir)) {
+				stream.filter(p -> Files.isRegularFile(p))
+						.filter(p -> p.toString().endsWith(".java"))
+						.forEach(p -> list.add(p));
 			}
 			return list;
 		}
 
 
-		List<String> buildCommandLine() {
+		List<String> buildCommandLine() throws IOException {
 			List<String> cmd = new ArrayList<>();
 			cmd.add("javac");
 			if (verbose) {
@@ -501,7 +502,7 @@ public class Corvoid {
 			cmd.add(classpath);
 			cmd.add("-d");
 			cmd.add(outDir.toString());
-			for (File f : walkSources(srcDir)) {
+			for (Path f : walkSources(srcDir)) {
 				cmd.add(f.toString());
 			}
 			return cmd;
@@ -516,9 +517,9 @@ public class Corvoid {
 		CompilerOptions options = new CompilerOptions();
 		options.classpath = tree.classpath();
 		String srcDir = project.getBuild().getSourceDirectory();
-		options.srcDir = new File(srcDir != null ? srcDir : "src");
+		options.srcDir = Path.of(srcDir != null ? srcDir : "src");
 		String outDir = project.getBuild().getOutputDirectory();
-		options.outDir = new File(outDir != null ? outDir : "target/classes");
+		options.outDir = Path.of(outDir != null ? outDir : "target/classes");
 		return options;
 	}
 	
@@ -529,7 +530,7 @@ public class Corvoid {
 		clearLine();
 	}
 
-	private void compileViaToolApi(CompilerOptions options) {
+	private void compileViaToolApi(CompilerOptions options) throws IOException {
 		JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
 		List<String> cmd = options.buildCommandLine();
 		cmd.remove(0); // drop javac
@@ -557,7 +558,7 @@ public class Corvoid {
 		CompilerOptions options = buildCompilerOptions();
 		final WatchService watcher = FileSystems.getDefault().newWatchService();
 		final AtomicLong dirCount = new AtomicLong(0);
-		Files.walk(options.srcDir.toPath()).forEach(new Consumer<Path>() {
+		Files.walk(options.srcDir).forEach(new Consumer<Path>() {
 			@Override
 			public void accept(Path path) {
 				try {

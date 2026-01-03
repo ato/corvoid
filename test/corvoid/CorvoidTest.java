@@ -3,9 +3,13 @@ package corvoid;
 import org.junit.Test;
 
 import java.io.ByteArrayOutputStream;
-import java.io.File;
+import java.io.IOException;
 import java.io.PrintStream;
+import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.SimpleFileVisitor;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.util.Arrays;
 import java.util.List;
 
@@ -21,10 +25,10 @@ public class CorvoidTest {
 
     @Test
     public void testOutdatedSortingAndInterpolation() throws Exception {
-        File tempDir = Files.createTempDirectory("corvoid-outdated-test").toFile();
+        Path tempDir = Files.createTempDirectory("corvoid-outdated-test");
         try {
-            File pom = new File(tempDir, "pom.xml");
-            Files.writeString(pom.toPath(),
+            Path pom = tempDir.resolve("pom.xml");
+            Files.writeString(pom,
                     "<project>\n" +
                     "    <properties>\n" +
                     "        <junit.version>4.13.1</junit.version>\n" +
@@ -73,10 +77,10 @@ public class CorvoidTest {
 
     @Test
     public void testOutdatedDependencyManagement() throws Exception {
-        File tempDir = Files.createTempDirectory("corvoid-dm-test").toFile();
+        Path tempDir = Files.createTempDirectory("corvoid-dm-test");
         try {
-            File pom = new File(tempDir, "pom.xml");
-            Files.writeString(pom.toPath(),
+            Path pom = tempDir.resolve("pom.xml");
+            Files.writeString(pom,
                     "<project>\n" +
                     "    <dependencyManagement>\n" +
                     "        <dependencies>\n" +
@@ -114,11 +118,11 @@ public class CorvoidTest {
 
     @Test
     public void testOutdatedIgnoreUnstable() throws Exception {
-        File tempDir = Files.createTempDirectory("corvoid-unstable-test").toFile();
-        File repoRoot = Files.createTempDirectory("corvoid-repo-root").toFile();
+        Path tempDir = Files.createTempDirectory("corvoid-unstable-test");
+        Path repoRoot = Files.createTempDirectory("corvoid-repo-root");
         try {
-            File pom = new File(tempDir, "pom.xml");
-            Files.writeString(pom.toPath(),
+            Path pom = tempDir.resolve("pom.xml");
+            Files.writeString(pom,
                     "<project>\n" +
                     "    <dependencies>\n" +
                     "        <dependency>\n" +
@@ -129,10 +133,10 @@ public class CorvoidTest {
                     "    </dependencies>\n" +
                     "</project>");
 
-            File metadataFile = new File(repoRoot, "org/example/example-art/maven-metadata-central.xml");
-            metadataFile.getParentFile().mkdirs();
+            Path metadataFile = repoRoot.resolve("org/example/example-art/maven-metadata-central.xml");
+            Files.createDirectories(metadataFile.getParent());
             
-            Files.writeString(metadataFile.toPath(),
+            Files.writeString(metadataFile,
                     "<metadata>\n" +
                     "  <groupId>org.example</groupId>\n" +
                     "  <artifactId>example-art</artifactId>\n" +
@@ -149,7 +153,7 @@ public class CorvoidTest {
                     "</metadata>");
             
             // Set last modified to now so it's not re-fetched (though it would fail to fetch from real maven central anyway)
-            metadataFile.setLastModified(System.currentTimeMillis());
+            Files.setLastModifiedTime(metadataFile, java.nio.file.attribute.FileTime.fromMillis(System.currentTimeMillis()));
 
             Corvoid corvoid = new Corvoid(tempDir, repoRoot);
             PrintStream oldOut = System.out;
@@ -172,13 +176,19 @@ public class CorvoidTest {
         }
     }
 
-    private void deleteDirectory(File directory) {
-        File[] allContents = directory.listFiles();
-        if (allContents != null) {
-            for (File file : allContents) {
-                deleteDirectory(file);
+    private void deleteDirectory(Path directory) throws IOException {
+        Files.walkFileTree(directory, new SimpleFileVisitor<Path>() {
+            @Override
+            public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
+                Files.delete(file);
+                return FileVisitResult.CONTINUE;
             }
-        }
-        directory.delete();
+
+            @Override
+            public FileVisitResult postVisitDirectory(Path dir, IOException exc) throws IOException {
+                Files.delete(dir);
+                return FileVisitResult.CONTINUE;
+            }
+        });
     }
 }

@@ -5,9 +5,10 @@ import corvoid.pom.Exclusion;
 import corvoid.pom.Model;
 
 import javax.xml.stream.XMLStreamException;
-import java.io.File;
 import java.io.IOException;
 import java.io.PrintStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.*;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
@@ -35,7 +36,7 @@ public class DependencyTree {
 			return model;
 		}
 		
-		public File file() {
+		public Path file() {
 			return cache.artifactPath(new Coord(model.getGroupId(), model.getArtifactId()), model.getVersion(), source.getClassifier(), source.getType());
 		}
 		
@@ -106,9 +107,13 @@ public class DependencyTree {
 		long totalSize() {
 			if (totalSize < 0) {
 				long total = 0;
-				File path = artifactPath();
-				if (path != null && path.exists()) {
-					total += path.length();
+				Path path = artifactPath();
+				if (path != null && Files.exists(path)) {
+					try {
+						total += Files.size(path);
+					} catch (IOException e) {
+						// ignore
+					}
 				}
 				for (Node child : children) {
 					total += child.totalSize();
@@ -137,9 +142,13 @@ public class DependencyTree {
 			double percentValue = 100.0 * nodeTotal / rootTotal;
 			String percent = rootTotal > 0 ? String.format(percentValue < 10.0 ? "%.1f%%" : "%.0f%%", percentValue) : (rootTotal == 0 && nodeTotal == 0 && depth == 0 ? "100.0%" : "");
 
-			File path = artifactPath();
-			if (path != null && path.exists()) {
-				out.format("%-60s %8s %8s %6s\n", cs, formatBytes(path.length()), totalSizeStr, percent);
+			Path path = artifactPath();
+			if (path != null && Files.exists(path)) {
+				try {
+					out.format("%-60s %8s %8s %6s\n", cs, formatBytes(Files.size(path)), totalSizeStr, percent);
+				} catch (IOException e) {
+					out.format("%-60s %8s %8s %6s\n", cs, "", totalSizeStr, percent);
+				}
 			} else {
 				out.format("%-60s %8s %8s %6s\n", cs, "", totalSizeStr, percent);
 			}
@@ -162,7 +171,7 @@ public class DependencyTree {
 			return v;
 		}
 
-		File artifactPath() {
+		Path artifactPath() {
 			if (source == null) {
 				return null;
 			}
@@ -188,7 +197,7 @@ public class DependencyTree {
 		}
 	}
 	
-	private void buildClasspath(Node node, List<File> out) {
+	private void buildClasspath(Node node, List<Path> out) {
 		if (node.source != null) {
 			out.add(node.artifactPath());
 		}
@@ -197,16 +206,16 @@ public class DependencyTree {
 		}
 	}
 	
-	public List<File> classpathFiles() {
-		List<File> files = new ArrayList<>();
+	public List<Path> classpathFiles() {
+		List<Path> files = new ArrayList<>();
 		buildClasspath(root, files);
 		return files;
 	}
 
 	public List<String> classpathStrings() {
-		List<File> files = classpathFiles();
+		List<Path> files = classpathFiles();
 		List<String> strings = new ArrayList<>(files.size());
-		for (File file : files) {
+		for (Path file : files) {
 			strings.add(file.toString());
 		}
 		return strings;
