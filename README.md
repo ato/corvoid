@@ -5,7 +5,7 @@ Corvoid is a small build tool for Java projects. It implements a limited but
 useful subset of the Apache Maven POM format.  It can resolve and download
 dependencies then compile and package a project into jar or uberjar file.
 
-Corvoid has no dependencies beyond JDK 7+ and can be packaged as a
+Corvoid has no dependencies beyond JDK 8+ and can be packaged as a
 single 100 KB jar.
 
 Usage
