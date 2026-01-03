@@ -1,5 +1,6 @@
 package corvoid;
 
+import corvoid.pom.Dependency;
 import corvoid.pom.Model;
 
 import javax.xml.stream.XMLInputFactory;
@@ -9,6 +10,7 @@ import javax.xml.transform.stream.StreamSource;
 import java.io.*;
 import java.net.MalformedURLException;
 import java.net.URL;
+import java.util.List;
 
 class Cache {
 	final File root = new File(new File(System.getProperty("user.home"), ".m2"), "repository");
@@ -74,6 +76,27 @@ class Cache {
 			output = new Model(project, output);
 		}
 		Interpolator.interpolate(output);
+		
+		resolveImports(output);
+		
 		return output;
+	}
+
+	/**
+	 * Resolves import dependencies in the dependencyManagement section by replacing the import with the contents of the
+	 * imported project's dependencyManagement section.
+	 */
+	void resolveImports(Model output) throws XMLStreamException, IOException {
+		List<Dependency> dependencies = output.getDependencyManagement().getDependencies();
+		for (int i = 0; i < dependencies.size(); i++) {
+			Dependency dep = dependencies.get(i);
+			if ("import".equals(dep.getScope()) && "pom".equals(dep.getType())) {
+				Model imported = readAndInheritProject(new Coord(dep.getGroupId(), dep.getArtifactId()), dep.getVersion());
+				output.getDependencyManagement().getDependencies().addAll(i, imported.getDependencyManagement().getDependencies());
+				i += imported.getDependencyManagement().getDependencies().size();
+				output.getDependencyManagement().getDependencies().remove(i);
+				i--;
+			}
+		}
 	}
 }

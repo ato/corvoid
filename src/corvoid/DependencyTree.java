@@ -138,6 +138,7 @@ public class DependencyTree {
 	}
 
 	public void resolve(Model project) throws XMLStreamException, IOException {
+		cache.resolveImports(project);
 		try {
 			Node node = new Node();
 			node.depth = 0;
