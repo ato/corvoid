@@ -42,6 +42,9 @@ COMMANDS
 *corvoid new <dir>*::
     Create a new project initialized with the default template.
 
+*corvoid outdated*::
+    Check if newer versions of dependencies are available.
+
 *corvoid run <class> [arguments...]*::
     Execute the 'main()' method of a class.
 

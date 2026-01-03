@@ -13,10 +13,14 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 
 public class DependencyTree {
-	Cache cache = new Cache();
+	Cache cache;
 	Map<Coord,String> versions = new HashMap<>();
 	Set<Coord> unconstrained = new HashSet<>();
 	Node root;
+
+	public DependencyTree(Cache cache) {
+		this.cache = cache;
+	}
 	
 	public class Node {
 		Set<Coord> exclusions;
@@ -49,12 +53,7 @@ public class DependencyTree {
 						&& (dep.getOptional() == null || !dep.getOptional())) {
 					String version = dep.getVersion();
 					if (version == null) {
-						// try to find version in DependencyManagement section
-						for (Dependency dm : model.getDependencyManagement().getDependencies()) {
-							if (dm.getArtifactId().equals(dep.getArtifactId()) && dm.getGroupId().equals(dep.getGroupId())) {
-								version = dm.getVersion();
-							}
-						}
+						version = model.findManagedVersion(dep);
 					}
 					if (version == null || version.startsWith("[") || version.startsWith("(")) {
 						unconstrained.add(coord);

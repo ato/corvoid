@@ -457,5 +457,16 @@ public class Model {
     public Map<String,String> getProperties() {
         return properties;
     }
+
+    public String findManagedVersion(Dependency dep) {
+        if (dependencyManagement != null) {
+            for (Dependency dm : dependencyManagement.getDependencies()) {
+                if (dm.getArtifactId().equals(dep.getArtifactId()) && dm.getGroupId().equals(dep.getGroupId())) {
+                    return dm.getVersion();
+                }
+            }
+        }
+        return null;
+    }
 }
 

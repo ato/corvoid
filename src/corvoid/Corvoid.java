@@ -35,15 +35,21 @@ import static java.util.Objects.requireNonNull;
 public class Corvoid {
 	
 	final File projectRoot;
-	
+	private final Cache cache;
+
 	public Corvoid() {
-		this.projectRoot = new File(System.getProperty("user.dir"));
+		this(new File(System.getProperty("user.dir")), null);
 	}
 
 	public Corvoid(File projectRoot) {
-		this.projectRoot = projectRoot;
+		this(projectRoot, null);
 	}
-	
+
+	public Corvoid(File projectRoot, File repositoryRoot) {
+		this.projectRoot = projectRoot;
+		this.cache = new Cache(repositoryRoot);
+	}
+
 	private String skeletonPom() throws IOException {
 		try (Reader r = new InputStreamReader(requireNonNull(Corvoid.class.getResourceAsStream("skeleton.pom"),
 				"Missing resource skeleton.pom"), UTF_8)) {
@@ -202,7 +208,7 @@ public class Corvoid {
 	public DependencyTree tree() throws XMLStreamException, IOException {
 		Model project = parseModel();
 		Interpolator.interpolate(project);
-		DependencyTree tree = new DependencyTree();
+		DependencyTree tree = new DependencyTree(cache);
 		tree.resolve(project);
 		return tree;
 	}
@@ -225,6 +231,7 @@ public class Corvoid {
 		System.out.println("  jar        - build a jar file of classes and resources");
 		System.out.println("  lint       - check for common problems");
 		System.out.println("  new        - create a new project");
+		System.out.println("  outdated   - check for newer versions of dependencies");
 		System.out.println("  run        - run a class");
 		System.out.println("  search     - search Maven Central for artifacts");
 		System.out.println("  tree [-s]  - print a dependency tree");
@@ -250,6 +257,7 @@ public class Corvoid {
 			case "uberjar": uberjar(); break;
 			case "watch": watch(); break;
 			case "lint": lint(); break;
+			case "outdated": outdated(); break;
 			default: usage();
 		}
 	}
@@ -289,6 +297,32 @@ public class Corvoid {
 		} catch (InterruptedException e) {
 			Thread.currentThread().interrupt();
 			throw new IOException(e);
+		}
+	}
+
+	public void outdated() throws XMLStreamException, IOException {
+		Model model = parseModel();
+		Interpolator.interpolate(model);
+		cache.resolveImports(model);
+		List<String> results = Collections.synchronizedList(new ArrayList<>());
+		model.getDependencies().parallelStream().forEach(dep -> {
+			try {
+				Coord coord = new Coord(dep.getGroupId(), dep.getArtifactId());
+				String version = dep.getVersion();
+				if (version == null) {
+					version = model.findManagedVersion(dep);
+				}
+				String latest = cache.latestVersion(coord);
+				if (latest != null && !latest.equals(version)) {
+					results.add(coord + " " + version + " -> " + latest);
+				}
+			} catch (Exception e) {
+				System.err.println("Error checking " + dep.getGroupId() + ":" + dep.getArtifactId() + ": " + e.getMessage());
+			}
+		});
+		Collections.sort(results);
+		for (String res : results) {
+			System.out.println(res);
 		}
 	}
 
@@ -477,7 +511,7 @@ public class Corvoid {
 	private CompilerOptions buildCompilerOptions() throws IOException, XMLStreamException {
 		Model project = new Model(superPom(), parseModel());
 		Interpolator.interpolate(project);
-		DependencyTree tree = new DependencyTree();
+		DependencyTree tree = new DependencyTree(cache);
 		tree.resolve(project);
 		CompilerOptions options = new CompilerOptions();
 		options.classpath = tree.classpath();

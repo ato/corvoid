@@ -15,18 +15,30 @@ import java.net.http.HttpResponse;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.util.ArrayList;
 import java.util.List;
 
 class Cache {
-	final File root = new File(new File(System.getProperty("user.home"), ".m2"), "repository");
+	private final File root;
 	final HttpClient httpClient = HttpClient.newHttpClient();
+
+	Cache(File root) {
+        if (root == null) {
+			root = new File(new File(System.getProperty("user.home"), ".m2"), "repository");
+		}
+		this.root = root;
+    }
 
 	private File groupDir(String groupId) {
 		return new File(root, groupId.replace('.', '/'));
 	}
+
+	private File artifactDir(Coord coord) {
+		return new File(groupDir(coord.groupId), coord.artifactId);
+	}
 	
 	private File artifactDir(Coord coord, String version) {
-		return new File(new File(groupDir(coord.groupId), coord.artifactId), version);
+		return new File(artifactDir(coord), version);
 	}
 
 	public File artifactPath(Coord coord, String version, String classifier, String type) {
@@ -38,6 +50,38 @@ class Cache {
 	private URI artifactUri(Coord coord, String version, String type) {
 		type = type == null ? "jar" : type;
 		return URI.create("https://repo1.maven.org/maven2/" + coord.groupId.replace('.', '/') + "/" + coord.artifactId + "/" + version + "/" + coord.artifactId + "-" + version + "." + type);
+	}
+
+	public File metadataPath(Coord coord) {
+		return new File(artifactDir(coord), "maven-metadata-central.xml");
+	}
+
+	private URI metadataUri(Coord coord) {
+		return URI.create("https://repo1.maven.org/maven2/" + coord.groupId.replace('.', '/') + "/" + coord.artifactId + "/maven-metadata.xml");
+	}
+
+	public File fetchMetadata(Coord coord) throws IOException {
+		File path = metadataPath(coord);
+		if (!path.exists() || System.currentTimeMillis() - path.lastModified() > 24 * 60 * 60 * 1000) {
+			URI uri = metadataUri(coord);
+			Files.createDirectories(path.getParentFile().toPath());
+			HttpRequest request = HttpRequest.newBuilder().uri(uri).build();
+			Path tmpFile = Path.of(path + ".tmp");
+			try {
+				HttpResponse<Path> response = httpClient.send(request, HttpResponse.BodyHandlers.ofFile(tmpFile));
+				if (response.statusCode() == 200) {
+					Files.move(tmpFile, path.toPath(), StandardCopyOption.REPLACE_EXISTING);
+				} else if (response.statusCode() != 404 || !path.exists()) {
+					throw new IOException("Unexpected status code: " + response.statusCode() + " for " + uri);
+				}
+			} catch (InterruptedException e) {
+				Thread.currentThread().interrupt();
+				throw new IOException(e);
+			} finally {
+				Files.deleteIfExists(tmpFile);
+			}
+		}
+		return path;
 	}
 	
 	public File fetch(Coord coord, String version, String classifier, String type) throws IOException {
@@ -65,6 +109,33 @@ class Cache {
 		return path.toFile();
 	}
 	
+	String latestVersion(Coord coord) throws IOException, XMLStreamException {
+		File path = fetchMetadata(coord);
+		if (!path.exists()) {
+			return null;
+		}
+		List<String> versions = new ArrayList<>();
+		try (InputStream in = new FileInputStream(path)) {
+			XMLStreamReader xml = XMLInputFactory.newInstance().createXMLStreamReader(new StreamSource(in));
+			while (xml.hasNext()) {
+				int event = xml.next();
+				if (event == XMLStreamReader.START_ELEMENT && "version".equals(xml.getLocalName())) {
+					versions.add(xml.getElementText());
+				}
+			}
+		}
+		Version latest = null;
+		for (String v : versions) {
+			Version version = new Version(v);
+			if (version.isStable()) {
+				if (latest == null || version.compareTo(latest) > 0) {
+					latest = version;
+				}
+			}
+		}
+		return latest.toString();
+	}
+
 	Model readProject(Coord coord, String version) throws XMLStreamException, IOException {
 		File path = fetch(coord, version, null, "pom");
 		try (InputStream in = new FileInputStream(path)) {
