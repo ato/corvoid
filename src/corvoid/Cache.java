@@ -18,6 +18,9 @@ import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * Cache for storing and retrieving artifacts from remote repositories.
+ */
 class Cache {
 	private final Path root;
 	final HttpClient httpClient = HttpClient.newHttpClient();
@@ -68,7 +71,6 @@ class Cache {
 			HttpRequest request = HttpRequest.newBuilder().uri(uri).build();
 			Path tmpFile = Path.of(path + ".tmp");
 			try {
-				System.out.println("Fetching " + uri);
 				HttpResponse<Path> response = httpClient.send(request, HttpResponse.BodyHandlers.ofFile(tmpFile));
 				if (response.statusCode() == 200) {
 					Files.move(tmpFile, path, StandardCopyOption.REPLACE_EXISTING);

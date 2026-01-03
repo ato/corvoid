@@ -14,13 +14,13 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 
 public class DependencyTree {
-	Cache cache;
+	Workspace workspace;
 	Map<Coord,String> versions = new HashMap<>();
 	Set<Coord> unconstrained = new HashSet<>();
 	Node root;
 
-	public DependencyTree(Cache cache) {
-		this.cache = cache;
+	public DependencyTree(Workspace workspace) {
+		this.workspace = workspace;
 	}
 	
 	public class Node {
@@ -37,7 +37,7 @@ public class DependencyTree {
 		}
 		
 		public Path file() {
-			return cache.artifactPath(new Coord(model.getGroupId(), model.getArtifactId()), model.getVersion(), source.getClassifier(), source.getType());
+			return workspace.artifactPath(new Coord(model.getGroupId(), model.getArtifactId()), model.getVersion(), source.getClassifier(), source.getType());
 		}
 		
 		public String getArtifactId() {
@@ -67,7 +67,7 @@ public class DependencyTree {
 						for (Exclusion exclusion : dep.getExclusions()) {
 							node.exclusions.add(new Coord(exclusion.getGroupId(), exclusion.getArtifactId()));
 						}
-						node.model = cache.readAndInheritProject(coord, version);
+						node.model = workspace.resolveProject(coord, version);
 						node.source = dep;
 						children.add(node);
 					}
@@ -175,7 +175,7 @@ public class DependencyTree {
 			if (source == null) {
 				return null;
 			}
-			return cache.artifactPath(coord(), version(), source.getClassifier(), source.getType());
+			return workspace.artifactPath(coord(), version(), source.getClassifier(), source.getType());
 		}
 
 		public List<Node> children() {
@@ -184,7 +184,7 @@ public class DependencyTree {
 	}
 
 	public void resolve(Model project) throws XMLStreamException, IOException {
-		cache.resolveImports(project);
+		workspace.resolveImports(project);
 		try {
 			Node node = new Node();
 			node.depth = 0;
@@ -239,9 +239,9 @@ public class DependencyTree {
 	}
 
 	public void fetchDependencies(Node node) throws IOException {
-		if (node.source != null) {
-			Coord coord = new Coord(node.source.getGroupId(), node.source.getArtifactId());
-			cache.fetch(coord, versions.get(coord), node.source.getClassifier(), node.source.getType());
+		if (node.source != null && !workspace.isLocalModule(node.coord())) {
+			Coord coord = node.coord();
+			workspace.getCache().fetch(coord, versions.get(coord), node.source.getClassifier(), node.source.getType());
 		}
 		for (Node child: node.children) {
 			fetchDependencies(child);

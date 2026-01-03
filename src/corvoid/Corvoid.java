@@ -36,7 +36,7 @@ import static java.util.Objects.requireNonNull;
 public class Corvoid {
 	
 	final Path projectRoot;
-	private final Cache cache;
+	private final Workspace workspace;
 
 	public Corvoid() {
 		this(Path.of(System.getProperty("user.dir")), null);
@@ -52,7 +52,7 @@ public class Corvoid {
 
 	public Corvoid(Path projectRoot, Path repositoryRoot) {
 		this.projectRoot = projectRoot;
-		this.cache = new Cache(repositoryRoot);
+		this.workspace = new Workspace(new Cache(repositoryRoot));
 	}
 
 	public Corvoid(File projectRoot, File repositoryRoot) {
@@ -239,14 +239,46 @@ public class Corvoid {
 	
 	public DependencyTree tree() throws XMLStreamException, IOException {
 		Model project = parseModel();
+		Path currentRoot = projectRoot;
+		if (project.getParent() != null && project.getParent().getArtifactId() != null) {
+			String relativePath = project.getParent().getRelativePath();
+			if (relativePath == null) relativePath = "../pom.xml";
+			Path parentPom = projectRoot.resolve(relativePath).normalize();
+			Model parent = parseModel(parentPom);
+			project = new Model(parent, project);
+			currentRoot = parentPom.getParent();
+		}
+		scanModules(currentRoot);
 		Interpolator.interpolate(project);
-		DependencyTree tree = new DependencyTree(cache);
+		DependencyTree tree = new DependencyTree(workspace);
 		tree.resolve(project);
 		return tree;
 	}
 
+	private void scanModules(Path root) throws XMLStreamException, IOException {
+		Path pom = root.resolve("pom.xml");
+		if (Files.exists(pom)) {
+			Model model = parseModel(pom);
+			String groupId = model.getGroupId();
+			if (groupId == null && model.getParent() != null) {
+				groupId = model.getParent().getGroupId();
+			}
+			String artifactId = model.getArtifactId();
+			if (groupId != null && artifactId != null) {
+				workspace.addLocalModule(new Coord(groupId, artifactId), pom);
+			}
+			for (String module : model.getModules()) {
+				scanModules(root.resolve(module));
+			}
+		}
+	}
+
 	public Model parseModel() throws XMLStreamException, FactoryConfigurationError, IOException {
-		try (var in = Files.newBufferedReader(projectRoot.resolve("pom.xml"))) {
+		return parseModel(projectRoot.resolve("pom.xml"));
+	}
+
+	public static Model parseModel(Path pomPath) throws XMLStreamException, FactoryConfigurationError, IOException {
+		try (var in = Files.newBufferedReader(pomPath)) {
 			XMLStreamReader xml = XMLInputFactory.newInstance().createXMLStreamReader(in);
 			xml.nextTag();
 			return new Model(xml);
@@ -339,7 +371,7 @@ public class Corvoid {
 	public void outdated() throws XMLStreamException, IOException {
 		Model model = parseModel();
 		Interpolator.interpolate(model);
-		cache.resolveImports(model);
+		workspace.resolveImports(model);
 		List<String> results = Collections.synchronizedList(new ArrayList<>());
 		model.getDependencies().parallelStream().forEach(dep -> {
 			try {
@@ -348,7 +380,7 @@ public class Corvoid {
 				if (version == null) {
 					version = model.findManagedVersion(dep);
 				}
-				String latest = cache.latestVersion(coord);
+				String latest = workspace.getCache().latestVersion(coord);
 				if (latest != null && !latest.equals(version)) {
 					results.add(coord + " " + version + " -> " + latest);
 				}
@@ -377,7 +409,7 @@ public class Corvoid {
 					try {
 						Coord coord = new Coord(dep.getGroupId(), dep.getArtifactId());
 						String version = dep.getVersion();
-						String latest = cache.latestVersion(coord);
+						String latest = workspace.getCache().latestVersion(coord);
 						if (latest != null && !latest.equals(version)) {
 							updates.add(new Update(dep, latest));
 						}
@@ -397,7 +429,7 @@ public class Corvoid {
 		// Pass 2: Update dependencies
 		model = parseModel();
 		Interpolator.interpolate(model);
-		cache.resolveImports(model);
+		workspace.resolveImports(model);
 
 		record Update(Dependency dep, String version) {}
 		List<Update> updates = new ArrayList<>();
@@ -411,7 +443,7 @@ public class Corvoid {
 					if (version == null) {
 						version = model.findManagedVersion(dep);
 					}
-					String latest = cache.latestVersion(coord);
+					String latest = workspace.getCache().latestVersion(coord);
 					if (latest != null && !latest.equals(version)) {
 						updates.add(new Update(dep, latest));
 					}
@@ -615,7 +647,7 @@ public class Corvoid {
 	private CompilerOptions buildCompilerOptions() throws IOException, XMLStreamException {
 		Model project = new Model(superPom(), parseModel());
 		Interpolator.interpolate(project);
-		DependencyTree tree = new DependencyTree(cache);
+		DependencyTree tree = new DependencyTree(workspace);
 		tree.resolve(project);
 		CompilerOptions options = new CompilerOptions();
 		options.classpath = tree.classpath();
