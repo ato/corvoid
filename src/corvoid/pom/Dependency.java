@@ -19,21 +19,33 @@ public class Dependency {
     private List<Exclusion> exclusions = new ArrayList<>();
     private Boolean optional;
 
+    public int startOffset = -1;
+    public int endOffset = -1;
+    public int versionStartOffset = -1;
+    public int versionEndOffset = -1;
+    public int artifactIdEndOffset = -1;
+
     public Dependency() {}
 
     public Dependency(XMLStreamReader xml) throws XMLStreamException {
+        startOffset = xml.getLocation().getCharacterOffset() - "<dependency>".length();
         while (xml.nextTag() == START_ELEMENT) {
-            switch(xml.getLocalName()) {
+            String tagName = xml.getLocalName();
+            int tagStart = xml.getLocation().getCharacterOffset() - tagName.length() - 2;
+            switch(tagName) {
                 case "groupId": {
                     this.groupId = xml.getElementText();
                     break;
                 }
                 case "artifactId": {
                     this.artifactId = xml.getElementText();
+                    artifactIdEndOffset = xml.getLocation().getCharacterOffset();
                     break;
                 }
                 case "version": {
+                    versionStartOffset = tagStart;
                     this.version = xml.getElementText();
+                    versionEndOffset = xml.getLocation().getCharacterOffset();
                     break;
                 }
                 case "type": {
@@ -71,6 +83,7 @@ public class Dependency {
                 }
             }
         }
+        endOffset = xml.getLocation().getCharacterOffset();
     }
 
     public Dependency(Dependency dependency1, Dependency dependency2) {

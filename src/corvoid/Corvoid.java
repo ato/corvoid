@@ -1,5 +1,6 @@
 package corvoid;
 
+import corvoid.pom.Dependency;
 import corvoid.pom.Model;
 
 import javax.tools.JavaCompiler;
@@ -98,41 +99,73 @@ public class Corvoid {
 		String artifactId = parts[1];
 
 		Model model = parseModel();
-		System.out.println("Adding dependency " + groupId + ":" + artifactId + " with version " + version);
-		System.out.println("Model end of dependencies: " + model.endOfDependencies);
-		
-		try (var in = new FileInputStream("pom.xml");
-			var out = new FileOutputStream("pom.xml.tmp")) {
-			int insertPosition = model.endOfDependencies != null ? model.endOfDependencies : model.endOfProject;
+		Dependency existing = null;
+		for (Dependency d : model.getDependencies()) {
+			if (groupId.equals(d.getGroupId()) && artifactId.equals(d.getArtifactId())) {
+				existing = d;
+				break;
+			}
+		}
 
-			// 1. copy file up to insert position
-			byte[] buffer = new byte[8192];
-			int remaining = insertPosition;
+		String dependencyXml = String.format(
+				"    <dependency>%n" +
+				"            <groupId>%s</groupId>%n" +
+				"            <artifactId>%s</artifactId>%n" +
+				"            <version>%s</version>%n" +
+				"        </dependency>%n    ",
+				groupId, artifactId, version
+		);
+
+
+		if (existing != null) {
+			System.out.println("Updating dependency " + groupId + ":" + artifactId + " from " + existing.getVersion() +
+							   " to " + version);
+			if (existing.versionStartOffset >= 0 && existing.versionEndOffset >= 0) {
+				// Replace existing <version>...</version>
+				splicePom(existing.versionStartOffset, "<version>" + version + "</version>",
+						existing.versionEndOffset - existing.versionStartOffset);
+			} else if (existing.artifactIdEndOffset >= 0) {
+				// Insert <version> after <artifactId>
+				splicePom(existing.artifactIdEndOffset, "\n            <version>" + version + "</version>", 0);
+			} else {
+				// Fallback: replace whole <dependency> block
+				splicePom(existing.startOffset, dependencyXml, existing.endOffset - existing.startOffset);
+			}
+		} else {
+			System.out.println("Adding dependency " + groupId + ":" + artifactId + " with version " + version);
+			// Insert at end of dependencies
+			int insertPosition = model.dependenciesEndOffset >= 0 ? model.dependenciesEndOffset : model.projectEndOffset;
+			splicePom(insertPosition, dependencyXml, 0);
+		}
+	}
+
+	private void splicePom(int offset, String insert, long skip) throws IOException {
+		File pom = new File(projectRoot, "pom.xml");
+		File tmp = new File(projectRoot, "pom.xml.tmp");
+		byte[] buffer = new byte[8192];
+
+		try (var in = new FileInputStream(pom);
+			 var out = new FileOutputStream(tmp)) {
+
+			int remaining = offset;
 			int nread;
 			while ((nread = in.read(buffer, 0, Math.min(buffer.length, remaining))) > 0) {
 				out.write(buffer, 0, nread);
 				remaining -= nread;
 			}
 
-			// 2. insert dependency
-			String dependencyXml = String.format(
-					"    <dependency>%n" +
-					"            <groupId>%s</groupId>%n" +
-					"            <artifactId>%s</artifactId>%n" +
-					"            <version>%s</version>%n" +
-					"        </dependency>%n    ",
-					groupId, artifactId, version
-			);
-			out.write(dependencyXml.getBytes(UTF_8));
+			out.write(insert.getBytes(UTF_8));
 
-			// 3. copy rest of file
+			while (skip > 0) {
+				skip -= in.skip(skip);
+			}
+
 			while ((nread = in.read(buffer)) >= 0) {
 				out.write(buffer, 0, nread);
 			}
 		}
 
-		// Replace original file with modified version
-		Files.move(Path.of("pom.xml.tmp"), Path.of("pom.xml"), StandardCopyOption.REPLACE_EXISTING);
+		Files.move(tmp.toPath(), pom.toPath(), StandardCopyOption.REPLACE_EXISTING);
 	}
 
 	public void newProject(String name) throws IOException {
