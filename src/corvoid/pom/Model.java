@@ -1,9 +1,13 @@
 package corvoid.pom;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import javax.xml.stream.XMLInputFactory;
 import javax.xml.stream.XMLStreamException;
 import javax.xml.stream.XMLStreamReader;
 import static javax.xml.stream.XMLStreamReader.START_ELEMENT;
@@ -41,6 +45,14 @@ public class Model {
     private Map<String,String> properties = new HashMap<>();
     public int projectEndOffset = -1;
     public int dependenciesEndOffset = -1;
+
+    public static Model read(Path pomFile) throws IOException, XMLStreamException {
+        try (var in = Files.newBufferedReader(pomFile)) {
+            XMLStreamReader xml = XMLInputFactory.newInstance().createXMLStreamReader(in);
+            xml.nextTag();
+            return new Model(xml);
+        }
+    }
 
     public Model() {}
 

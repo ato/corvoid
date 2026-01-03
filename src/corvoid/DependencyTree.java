@@ -10,13 +10,12 @@ import java.io.PrintStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Future;
+import java.util.concurrent.*;
 
 public class DependencyTree {
 	Workspace workspace;
-	Map<Coord,String> versions = new HashMap<>();
-	Set<Coord> unconstrained = new HashSet<>();
+	Map<Coord,String> versions = new ConcurrentHashMap<>();
+	Set<Coord> unconstrained = Collections.newSetFromMap(new ConcurrentHashMap<>());
 	Node root;
 
 	public DependencyTree(Workspace workspace) {
@@ -59,17 +58,19 @@ public class DependencyTree {
 					if (version == null || version.startsWith("[") || version.startsWith("(")) {
 						unconstrained.add(coord);
 					} else {
-						unconstrained.remove(coord);
-						versions.put(coord, version);
-						Node node = new Node();
-						node.depth = depth + 1;
-						node.exclusions = new HashSet<>(exclusions);
-						for (Exclusion exclusion : dep.getExclusions()) {
-							node.exclusions.add(new Coord(exclusion.getGroupId(), exclusion.getArtifactId()));
+						if (versions.putIfAbsent(coord, version) == null) {
+							unconstrained.remove(coord);
+							Node node = new Node();
+							node.depth = depth + 1;
+							node.exclusions = new HashSet<>(exclusions);
+							for (Exclusion exclusion : dep.getExclusions()) {
+								node.exclusions.add(new Coord(exclusion.getGroupId(), exclusion.getArtifactId()));
+							}
+							String finalVersion = version;
+							node.future = workspace.executor.submit(() -> workspace.resolveProject(coord, finalVersion));
+							node.source = dep;
+							children.add(node);
 						}
-						node.model = workspace.resolveProject(coord, version);
-						node.source = dep;
-						children.add(node);
 					}
 				}
 			}
@@ -185,16 +186,12 @@ public class DependencyTree {
 
 	public void resolve(Model project) throws XMLStreamException, IOException {
 		workspace.resolveImports(project);
-		try {
-			Node node = new Node();
-			node.depth = 0;
-			node.exclusions = new HashSet<>();
-			node.model = project;
-			node.resolve();
-			root = node;
-		} finally {
-			//cache.threadPool.shutdown();
-		}
+		Node node = new Node();
+		node.depth = 0;
+		node.exclusions = new HashSet<>();
+		node.model = project;
+		node.resolve();
+		root = node;
 	}
 	
 	private void buildClasspath(Node node, List<Path> out) {
@@ -239,12 +236,27 @@ public class DependencyTree {
 	}
 
 	public void fetchDependencies(Node node) throws IOException {
+		List<Future<?>> futures = new ArrayList<>();
+		fetchDependenciesRecursive(node, futures);
+		for (Future<?> future : futures) {
+			try {
+				future.get();
+			} catch (InterruptedException | ExecutionException e) {
+				throw new IOException(e);
+			}
+		}
+	}
+
+	private void fetchDependenciesRecursive(Node node, List<Future<?>> futures) {
 		if (node.source != null && !workspace.isLocalModule(node.coord())) {
 			Coord coord = node.coord();
-			workspace.getCache().fetch(coord, versions.get(coord), node.source.getClassifier(), node.source.getType());
+			futures.add(workspace.executor.submit(() -> {
+				workspace.getCache().fetch(coord, versions.get(coord), node.source.getClassifier(), node.source.getType());
+				return null;
+			}));
 		}
-		for (Node child: node.children) {
-			fetchDependencies(child);
+		for (Node child : node.children) {
+			fetchDependenciesRecursive(child, futures);
 		}
 	}
 	

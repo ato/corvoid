@@ -1,6 +1,5 @@
 package corvoid;
 
-import corvoid.pom.Dependency;
 import corvoid.pom.Model;
 
 import javax.xml.stream.XMLInputFactory;
@@ -8,6 +7,7 @@ import javax.xml.stream.XMLStreamException;
 import javax.xml.stream.XMLStreamReader;
 import javax.xml.transform.stream.StreamSource;
 import java.io.*;
+import java.io.UncheckedIOException;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -17,13 +17,16 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.*;
 
 /**
  * Cache for storing and retrieving artifacts from remote repositories.
  */
 class Cache {
 	private final Path root;
-	final HttpClient httpClient = HttpClient.newHttpClient();
+	private final HttpClient httpClient = HttpClient.newHttpClient();
+	private final Map<Path, CompletableFuture<Path>> pendingDownloads = new ConcurrentHashMap<>();
 
 	Cache(Path root) {
         if (root == null) {
@@ -66,50 +69,56 @@ class Cache {
 	public Path fetchMetadata(Coord coord) throws IOException {
 		Path path = metadataPath(coord);
 		if (!Files.exists(path) || System.currentTimeMillis() - Files.getLastModifiedTime(path).toMillis() > 24 * 60 * 60 * 1000) {
-			URI uri = metadataUri(coord);
-			Files.createDirectories(path.getParent());
-			HttpRequest request = HttpRequest.newBuilder().uri(uri).build();
-			Path tmpFile = Path.of(path + ".tmp");
-			try {
-				HttpResponse<Path> response = httpClient.send(request, HttpResponse.BodyHandlers.ofFile(tmpFile));
-				if (response.statusCode() == 200) {
-					Files.move(tmpFile, path, StandardCopyOption.REPLACE_EXISTING);
-				} else if (response.statusCode() != 404 || !Files.exists(path)) {
-					throw new IOException("Unexpected status code: " + response.statusCode() + " for " + uri);
-				}
-			} catch (InterruptedException e) {
-				Thread.currentThread().interrupt();
-				throw new IOException(e);
-			} finally {
-				Files.deleteIfExists(tmpFile);
-			}
+			return downloadIfMissing(path, metadataUri(coord), true);
 		}
 		return path;
 	}
 	
 	public Path fetch(Coord coord, String version, String classifier, String type) throws IOException {
-		URI uri = artifactUri(coord, version, type);
-		Path path = artifactPath(coord, version, classifier, type);
-		if (!Files.exists(path)) {
-			Files.createDirectories(path.getParent());
+		return downloadIfMissing(artifactPath(coord, version, classifier, type), artifactUri(coord, version, type), false);
+	}
+
+	private Path downloadIfMissing(Path path, URI uri, boolean isMetadata) throws IOException {
+		if (Files.exists(path) && !isMetadata) {
+			return path;
+		}
+		CompletableFuture<Path> future = pendingDownloads.computeIfAbsent(path, p -> {
+			try {
+				Files.createDirectories(path.getParent());
+			} catch (IOException e) {
+				return CompletableFuture.failedFuture(e);
+			}
 
 			System.out.println("Fetching " + uri);
 			HttpRequest request = HttpRequest.newBuilder().uri(uri).build();
 			Path tmpFile = Path.of(path + ".tmp");
-			try {
-				HttpResponse<Path> response = httpClient.send(request, HttpResponse.BodyHandlers.ofFile(tmpFile));
-				if (response.statusCode() != 200) {
-					throw new IOException("Unexpected status code: " + response.statusCode() + " for " + uri);
-				}
-				Files.move(tmpFile, path, StandardCopyOption.REPLACE_EXISTING);
-			} catch (InterruptedException e) {
-				Thread.currentThread().interrupt();
-				throw new IOException(e);
-			} finally {
-				Files.deleteIfExists(tmpFile);
-			}
+			return httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofFile(tmpFile))
+					.thenApply(response -> {
+						try {
+							if (response.statusCode() == 200) {
+								Files.move(tmpFile, path, StandardCopyOption.REPLACE_EXISTING);
+							} else if (isMetadata && response.statusCode() == 404 && Files.exists(path)) {
+								// Keep existing metadata if 404
+							} else {
+								throw new IOException("Unexpected status code: " + response.statusCode() + " for " + uri);
+							}
+							return path;
+						} catch (IOException e) {
+							throw new UncheckedIOException(e);
+						} finally {
+							try {
+								Files.deleteIfExists(tmpFile);
+							} catch (IOException ignored) {
+							}
+							pendingDownloads.remove(path);
+						}
+					});
+		});
+		try {
+			return future.get();
+		} catch (Exception e) {
+			throw new IOException(e);
 		}
-		return path;
 	}
 	
 	String latestVersion(Coord coord) throws IOException, XMLStreamException {
@@ -141,42 +150,6 @@ class Cache {
 
 	Model readProject(Coord coord, String version) throws XMLStreamException, IOException {
 		Path path = fetch(coord, version, null, "pom");
-		try (InputStream in = Files.newInputStream(path)) {
-			XMLStreamReader xml = XMLInputFactory.newInstance().createXMLStreamReader(new StreamSource(in));
-			xml.nextTag();
-			return new Model(xml);
-		}
-	}
-
-	Model readAndInheritProject(Coord coord, String version) throws XMLStreamException, IOException {
-		Model output = readProject(coord, version);
-		Model project = output;
-		while (project.getParent() != null && project.getParent().getArtifactId() != null) {
-			project = readProject(new Coord(project.getParent().getGroupId(), project.getParent().getArtifactId()), project.getParent().getVersion());
-			output = new Model(project, output);
-		}
-		Interpolator.interpolate(output);
-		
-		resolveImports(output);
-		
-		return output;
-	}
-
-	/**
-	 * Resolves import dependencies in the dependencyManagement section by replacing the import with the contents of the
-	 * imported project's dependencyManagement section.
-	 */
-	void resolveImports(Model output) throws XMLStreamException, IOException {
-		List<Dependency> dependencies = output.getDependencyManagement().getDependencies();
-		for (int i = 0; i < dependencies.size(); i++) {
-			Dependency dep = dependencies.get(i);
-			if ("import".equals(dep.getScope()) && "pom".equals(dep.getType())) {
-				Model imported = readAndInheritProject(new Coord(dep.getGroupId(), dep.getArtifactId()), dep.getVersion());
-				output.getDependencyManagement().getDependencies().addAll(i, imported.getDependencyManagement().getDependencies());
-				i += imported.getDependencyManagement().getDependencies().size();
-				output.getDependencyManagement().getDependencies().remove(i);
-				i--;
-			}
-		}
+		return Model.read(path);
 	}
 }

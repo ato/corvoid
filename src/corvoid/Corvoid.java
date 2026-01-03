@@ -244,45 +244,19 @@ public class Corvoid {
 			String relativePath = project.getParent().getRelativePath();
 			if (relativePath == null) relativePath = "../pom.xml";
 			Path parentPom = projectRoot.resolve(relativePath).normalize();
-			Model parent = parseModel(parentPom);
+			Model parent = Model.read(parentPom);
 			project = new Model(parent, project);
 			currentRoot = parentPom.getParent();
 		}
-		scanModules(currentRoot);
+		workspace.scanModules(currentRoot);
 		Interpolator.interpolate(project);
 		DependencyTree tree = new DependencyTree(workspace);
 		tree.resolve(project);
 		return tree;
 	}
 
-	private void scanModules(Path root) throws XMLStreamException, IOException {
-		Path pom = root.resolve("pom.xml");
-		if (Files.exists(pom)) {
-			Model model = parseModel(pom);
-			String groupId = model.getGroupId();
-			if (groupId == null && model.getParent() != null) {
-				groupId = model.getParent().getGroupId();
-			}
-			String artifactId = model.getArtifactId();
-			if (groupId != null && artifactId != null) {
-				workspace.addLocalModule(new Coord(groupId, artifactId), pom);
-			}
-			for (String module : model.getModules()) {
-				scanModules(root.resolve(module));
-			}
-		}
-	}
-
 	public Model parseModel() throws XMLStreamException, FactoryConfigurationError, IOException {
-		return parseModel(projectRoot.resolve("pom.xml"));
-	}
-
-	public static Model parseModel(Path pomPath) throws XMLStreamException, FactoryConfigurationError, IOException {
-		try (var in = Files.newBufferedReader(pomPath)) {
-			XMLStreamReader xml = XMLInputFactory.newInstance().createXMLStreamReader(in);
-			xml.nextTag();
-			return new Model(xml);
-		}
+		return Model.read(projectRoot.resolve("pom.xml"));
 	}
 
 	private void usage() {
