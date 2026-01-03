@@ -12,8 +12,10 @@ import javax.xml.stream.XMLStreamReader;
 import javax.xml.transform.stream.StreamSource;
 import java.io.*;
 import java.lang.ProcessBuilder.Redirect;
-import java.net.HttpURLConnection;
-import java.net.URL;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.nio.file.*;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.time.Instant;
@@ -253,31 +255,40 @@ public class Corvoid {
 	}
 
 	@SuppressWarnings("unchecked")
-    public void search(String query) throws IOException {
-		URL url = new URL("https://central.sonatype.com/api/internal/browse/components");
-		HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-		conn.setRequestMethod("POST");
-		conn.setRequestProperty("Content-Type", "application/json");
-		conn.setDoOutput(true);
-		try (OutputStream out = conn.getOutputStream()) {
-			Json.write(out, Map.of("size", 10, "searchTerm", query, "filter", List.of()));
-		}
-		try (InputStream in = conn.getInputStream()) {
-			var results = (Map<String, Object>) Json.read(in);
-			var components = (List<Map<String, Object>>) results.get("components");
-			for (var r : components) {
-				var versionInfo = (Map<String,Object>)r.get("latestVersionInfo");
-				var timestamp = Instant.ofEpochMilli((long)versionInfo.get("timestampUnixWithMS"));
-				var id = String.format("\033[90m%s:\033[1;36m%s\033[0m \033[1;33m%s\033[0m \033[90m%s\033[0m", r.get("namespace"), r.get("name"),
-						versionInfo.get("version"), timestamp.atZone(ZoneId.systemDefault()).toLocalDate());
-				String description = (String)r.get("description");
-				if (description == null) {
-					System.out.println(id);
-				} else {
-					description = description.replaceAll("\\s+", " ");
-					System.out.printf("%-100s # %s%n", id, description);
+	public void search(String query) throws IOException {
+		HttpClient client = HttpClient.newHttpClient();
+		ByteArrayOutputStream out = new ByteArrayOutputStream();
+		Json.write(out, Map.of("size", 10, "searchTerm", query, "filter", List.of()));
+		HttpRequest request = HttpRequest.newBuilder()
+				.uri(URI.create("https://central.sonatype.com/api/internal/browse/components"))
+				.header("Content-Type", "application/json")
+				.POST(HttpRequest.BodyPublishers.ofByteArray(out.toByteArray()))
+				.build();
+		try {
+			HttpResponse<InputStream> response = client.send(request, HttpResponse.BodyHandlers.ofInputStream());
+			if (response.statusCode() != 200) {
+				throw new IOException("Unexpected status code: " + response.statusCode());
+			}
+			try (InputStream in = response.body()) {
+				var results = (Map<String, Object>) Json.read(in);
+				var components = (List<Map<String, Object>>) results.get("components");
+				for (var r : components) {
+					var versionInfo = (Map<String, Object>) r.get("latestVersionInfo");
+					var timestamp = Instant.ofEpochMilli((long) versionInfo.get("timestampUnixWithMS"));
+					var id = String.format("\033[90m%s:\033[1;36m%s\033[0m \033[1;33m%s\033[0m \033[90m%s\033[0m", r.get("namespace"), r.get("name"),
+							versionInfo.get("version"), timestamp.atZone(ZoneId.systemDefault()).toLocalDate());
+					String description = (String) r.get("description");
+					if (description == null) {
+						System.out.println(id);
+					} else {
+						description = description.replaceAll("\\s+", " ");
+						System.out.printf("%-100s # %s%n", id, description);
+					}
 				}
 			}
+		} catch (InterruptedException e) {
+			Thread.currentThread().interrupt();
+			throw new IOException(e);
 		}
 	}
 

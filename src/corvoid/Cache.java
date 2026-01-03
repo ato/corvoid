@@ -8,13 +8,19 @@ import javax.xml.stream.XMLStreamException;
 import javax.xml.stream.XMLStreamReader;
 import javax.xml.transform.stream.StreamSource;
 import java.io.*;
-import java.net.MalformedURLException;
-import java.net.URL;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.List;
 
 class Cache {
 	final File root = new File(new File(System.getProperty("user.home"), ".m2"), "repository");
-	
+	final HttpClient httpClient = HttpClient.newHttpClient();
+
 	private File groupDir(String groupId) {
 		return new File(root, groupId.replace('.', '/'));
 	}
@@ -29,34 +35,34 @@ class Cache {
 				(classifier != null ? "-" + classifier : "") + "." + type);
 	}
 	
-	private URL artifactUrl(Coord coord, String version, String type) {
-		try {
-			type = type == null ? "jar" : type;
-			return new URL("https://repo1.maven.org/maven2/" + coord.groupId.replace('.', '/') + "/" + coord.artifactId + "/" + version + "/" + coord.artifactId + "-" + version + "." + type);
-		} catch (MalformedURLException e) {
-			throw new RuntimeException(e);
-		}
+	private URI artifactUri(Coord coord, String version, String type) {
+		type = type == null ? "jar" : type;
+		return URI.create("https://repo1.maven.org/maven2/" + coord.groupId.replace('.', '/') + "/" + coord.artifactId + "/" + version + "/" + coord.artifactId + "-" + version + "." + type);
 	}
 	
 	public File fetch(Coord coord, String version, String classifier, String type) throws IOException {
-		URL url = artifactUrl(coord, version, type);
-		File path = artifactPath(coord, version, classifier, type);
-		if (!path.exists()) {
-			path.getParentFile().mkdirs();
+		URI uri = artifactUri(coord, version, type);
+		Path path = artifactPath(coord, version, classifier, type).toPath();
+		if (!Files.exists(path)) {
+			Files.createDirectories(path.getParent());
 
-			System.out.println("Fetching " + url);
-			try (InputStream in = url.openStream();
-					OutputStream out = new FileOutputStream(path)) {
-				byte[] buf = new byte[8192];
-				for (;;) {
-					int nbytes = in.read(buf);
-					if (nbytes == -1)
-						break;
-					out.write(buf, 0, nbytes);
+			System.out.println("Fetching " + uri);
+			HttpRequest request = HttpRequest.newBuilder().uri(uri).build();
+			Path tmpFile = Path.of(path + ".tmp");
+			try {
+				HttpResponse<Path> response = httpClient.send(request, HttpResponse.BodyHandlers.ofFile(tmpFile));
+				if (response.statusCode() != 200) {
+					throw new IOException("Unexpected status code: " + response.statusCode() + " for " + uri);
 				}
+				Files.move(tmpFile, path, StandardCopyOption.REPLACE_EXISTING);
+			} catch (InterruptedException e) {
+				Thread.currentThread().interrupt();
+				throw new IOException(e);
+			} finally {
+				Files.deleteIfExists(tmpFile);
 			}
 		}
-		return path;
+		return path.toFile();
 	}
 	
 	Model readProject(Coord coord, String version) throws XMLStreamException, IOException {
