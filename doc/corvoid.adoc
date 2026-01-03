@@ -45,6 +45,9 @@ COMMANDS
 *corvoid run <class> [arguments...]*::
     Execute the 'main()' method of a class.
 
+*corvoid search <query>*::
+    Search Maven Central for artifacts matching the query.
+
 *corvoid tree [-s]*::
     Display the project's dependencies as a tree. If the -s option is
     given, the dependencies are sorted by size.

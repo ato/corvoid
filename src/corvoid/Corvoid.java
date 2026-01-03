@@ -1,7 +1,6 @@
 package corvoid;
 
 import corvoid.pom.Model;
-import corvoid.pom.Plugin;
 
 import javax.tools.JavaCompiler;
 import javax.tools.ToolProvider;
@@ -12,8 +11,12 @@ import javax.xml.stream.XMLStreamReader;
 import javax.xml.transform.stream.StreamSource;
 import java.io.*;
 import java.lang.ProcessBuilder.Redirect;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.nio.file.*;
 import java.nio.file.attribute.BasicFileAttributes;
+import java.time.Instant;
+import java.time.ZoneId;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
@@ -139,6 +142,7 @@ public class Corvoid {
 		System.out.println("  jar        - build a jar file of classes and resources");
 		System.out.println("  lint       - check for common problems");
 		System.out.println("  new        - create a new project");
+		System.out.println("  search     - search Maven Central for artifacts");
 		System.out.println("  tree [-s]  - print a dependency tree");
 		System.out.println("  run        - run a class");
 		System.out.println("  uberjar    - build a standalone jar file");
@@ -154,6 +158,7 @@ public class Corvoid {
 			case "clean": clean(); break;
 			case "classpath": System.out.println(tree().classpath()); break;
 			case "deps": tree().fetchDependencies(); break;
+			case "search": search(args[1]); break;
 			case "tree": tree().print(System.out, args.length > 1 && "-s".equals(args[1])); break;
 			case "compile": compile(); break;
 			case "run": run(args); break;
@@ -162,6 +167,35 @@ public class Corvoid {
 			case "watch": watch(); break;
 			case "lint": lint(); break;
 			default: usage();
+		}
+	}
+
+	@SuppressWarnings("unchecked")
+    public void search(String query) throws IOException {
+		URL url = new URL("https://central.sonatype.com/api/internal/browse/components");
+		HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+		conn.setRequestMethod("POST");
+		conn.setRequestProperty("Content-Type", "application/json");
+		conn.setDoOutput(true);
+		try (OutputStream out = conn.getOutputStream()) {
+			Json.write(out, Map.of("size", 10, "searchTerm", query, "filter", List.of()));
+		}
+		try (InputStream in = conn.getInputStream()) {
+			var results = (Map<String, Object>) Json.read(in);
+			var components = (List<Map<String, Object>>) results.get("components");
+			for (var r : components) {
+				var versionInfo = (Map<String,Object>)r.get("latestVersionInfo");
+				var timestamp = Instant.ofEpochMilli((long)versionInfo.get("timestampUnixWithMS"));
+				var id = String.format("\033[90m%s:\033[1;36m%s\033[0m \033[1;33m%s\033[0m \033[90m%s\033[0m", r.get("namespace"), r.get("name"),
+						versionInfo.get("version"), timestamp.atZone(ZoneId.systemDefault()).toLocalDate());
+				String description = (String)r.get("description");
+				if (description == null) {
+					System.out.println(id);
+				} else {
+					description = description.replaceAll("\\s+", " ");
+					System.out.printf("%-100s # %s%n", id, description);
+				}
+			}
 		}
 	}
 
