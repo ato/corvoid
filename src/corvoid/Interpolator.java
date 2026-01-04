@@ -15,11 +15,10 @@ class Interpolator implements Transformer {
 	}
 
 	private String interpolate(String s) {
-		if (s == null) {
-			return s;
-		}
-		StringBuilder out = new StringBuilder();
-		int pos = 0;
+		if (s == null) return s;
+		int pos = s.indexOf('$');
+		if (pos < 0) return s;
+		StringBuilder out = null;
 		for (;;) {
 			int i = s.indexOf("${", pos);
 			if (i < 0) {
@@ -30,13 +29,12 @@ class Interpolator implements Transformer {
 				break;
 			}
 			String key = s.substring(i + 2, j);
+			if (out == null) out = new StringBuilder(s.length());
 			out.append(s, pos, i);
 			out.append(interpolate(resolveInterpolation(key)));
 			pos = j + 1;
 		}
-		if (pos == 0) {
-			return s;
-		}
+		if (out == null) return s;
 		out.append(s.substring(pos));
 		return out.toString();
 	}
