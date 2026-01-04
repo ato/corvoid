@@ -18,6 +18,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.file.*;
 import java.nio.file.attribute.BasicFileAttributes;
+import java.nio.file.attribute.FileTime;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.util.*;
@@ -674,24 +675,53 @@ public class Corvoid {
 		return options;
 	}
 
+	private boolean isChanged(CompilerOptions options) throws IOException {
+		if (!Files.exists(options.outDir)) {
+			return true;
+		}
+		if (!Files.exists(options.srcDir)) {
+			return false;
+		}
+		long lastModified = Files.getLastModifiedTime(options.outDir).toMillis();
+		try (Stream<Path> stream = Files.walk(options.srcDir)) {
+			boolean changed = stream.filter(p -> Files.isRegularFile(p))
+					.filter(p -> p.toString().endsWith(".java"))
+					.anyMatch(p -> {
+						try {
+							long srcMod = Files.getLastModifiedTime(p).toMillis();
+							return srcMod > lastModified;
+						} catch (IOException e) {
+							return true;
+						}
+					});
+			return changed;
+		}
+	}
+
 	private void compile() throws XMLStreamException, IOException {
 		CompilerOptions options = buildCompilerOptions();
-		if (!Files.exists(options.outDir)) {
-			Files.createDirectories(options.outDir);
+		if (isChanged(options)) {
+			if (!Files.exists(options.outDir)) {
+				Files.createDirectories(options.outDir);
+			}
+			System.out.println("Compiling");
+			compileViaToolApi(options);
+			Files.setLastModifiedTime(options.outDir, FileTime.from(Instant.now()));
+			clearLine();
 		}
-		System.out.println("Compiling");
-		compileViaToolApi(options);
-		clearLine();
 	}
 
 	private void compileTests() throws XMLStreamException, IOException {
 		CompilerOptions options = buildCompilerOptions(true);
-		if (!Files.exists(options.outDir)) {
-			Files.createDirectories(options.outDir);
+		if (isChanged(options)) {
+			if (!Files.exists(options.outDir)) {
+				Files.createDirectories(options.outDir);
+			}
+			System.out.println("Compiling tests");
+			compileViaToolApi(options);
+			Files.setLastModifiedTime(options.outDir, FileTime.from(Instant.now()));
+			clearLine();
 		}
-		System.out.println("Compiling tests");
-		compileViaToolApi(options);
-		clearLine();
 	}
 
 	private void test(String[] args) throws XMLStreamException, IOException {
