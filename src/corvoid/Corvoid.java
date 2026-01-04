@@ -2,6 +2,7 @@ package corvoid;
 
 import corvoid.pom.Dependency;
 import corvoid.pom.Model;
+import corvoid.pom.Resource;
 
 import javax.tools.JavaCompiler;
 import javax.tools.ToolProvider;
@@ -613,9 +614,13 @@ public class Corvoid {
 		String classpath;
 		boolean verbose = false;
 		boolean junit5 = false;
-		
+		List<Resource> resources;
+
 		List<Path> walkSources(Path srcDir) throws IOException {
 			List<Path> list = new ArrayList<>();
+			if (!Files.exists(srcDir)) {
+				return list;
+			}
 			try (Stream<Path> stream = Files.walk(srcDir)) {
 				stream.filter(p -> Files.isRegularFile(p))
 						.filter(p -> p.toString().endsWith(".java"))
@@ -666,11 +671,13 @@ public class Corvoid {
 			options.outDir = Path.of(outDir != null ? outDir : "target/test-classes");
 			String mainOutDir = project.getBuild().getOutputDirectory();
 			options.classpath = (mainOutDir != null ? mainOutDir : "target/classes") + ":" + options.classpath;
+			options.resources = project.getBuild().getTestResources();
 		} else {
 			String srcDir = project.getBuild().getSourceDirectory();
 			options.srcDir = Path.of(srcDir != null ? srcDir : "src");
 			String outDir = project.getBuild().getOutputDirectory();
 			options.outDir = Path.of(outDir != null ? outDir : "target/classes");
+			options.resources = project.getBuild().getResources();
 		}
 		return options;
 	}
@@ -679,23 +686,39 @@ public class Corvoid {
 		if (!Files.exists(options.outDir)) {
 			return true;
 		}
-		if (!Files.exists(options.srcDir)) {
-			return false;
-		}
 		long lastModified = Files.getLastModifiedTime(options.outDir).toMillis();
-		try (Stream<Path> stream = Files.walk(options.srcDir)) {
-			boolean changed = stream.filter(p -> Files.isRegularFile(p))
-					.filter(p -> p.toString().endsWith(".java"))
-					.anyMatch(p -> {
-						try {
-							long srcMod = Files.getLastModifiedTime(p).toMillis();
-							return srcMod > lastModified;
-						} catch (IOException e) {
-							return true;
-						}
-					});
-			return changed;
+		if (Files.exists(options.srcDir)) {
+			try (Stream<Path> stream = Files.walk(options.srcDir)) {
+				boolean changed = stream.filter(p -> Files.isRegularFile(p))
+						.filter(p -> p.toString().endsWith(".java"))
+						.anyMatch(p -> {
+							try {
+								long srcMod = Files.getLastModifiedTime(p).toMillis();
+								return srcMod > lastModified;
+							} catch (IOException e) {
+								return true;
+							}
+						});
+				if (changed) return true;
+			}
 		}
+		for (Resource res : options.resources) {
+			Path resDir = projectRoot.resolve(res.getDirectory() != null ? res.getDirectory() : "src/main/resources");
+			if (Files.exists(resDir)) {
+				try (Stream<Path> stream = Files.walk(resDir)) {
+					boolean changed = stream.filter(Files::isRegularFile)
+							.anyMatch(p -> {
+								try {
+									return Files.getLastModifiedTime(p).toMillis() > lastModified;
+								} catch (IOException e) {
+									return true;
+								}
+							});
+					if (changed) return true;
+				}
+			}
+		}
+		return false;
 	}
 
 	private void compile() throws XMLStreamException, IOException {
@@ -706,6 +729,7 @@ public class Corvoid {
 			}
 			System.out.println("Compiling");
 			compileViaToolApi(options);
+			copyResources(options);
 			Files.setLastModifiedTime(options.outDir, FileTime.from(Instant.now()));
 			clearLine();
 		}
@@ -719,8 +743,42 @@ public class Corvoid {
 			}
 			System.out.println("Compiling tests");
 			compileViaToolApi(options);
+			copyResources(options);
 			Files.setLastModifiedTime(options.outDir, FileTime.from(Instant.now()));
 			clearLine();
+		}
+	}
+
+	private void copyResources(CompilerOptions options) throws IOException {
+		for (Resource res : options.resources) {
+			Path resDir = projectRoot.resolve(res.getDirectory() != null ? res.getDirectory() : "src/main/resources");
+			if (Files.exists(resDir)) {
+				Path targetDir = options.outDir;
+				if (!targetDir.isAbsolute()) {
+					targetDir = projectRoot.resolve(targetDir);
+				}
+				if (res.getTargetPath() != null) {
+					targetDir = targetDir.resolve(res.getTargetPath());
+				}
+				if (!Files.exists(targetDir)) {
+					Files.createDirectories(targetDir);
+				}
+				Path finalTargetDir = targetDir;
+				try (Stream<Path> stream = Files.walk(resDir)) {
+					stream.filter(Files::isRegularFile).forEach(p -> {
+						try {
+							Path relative = resDir.relativize(p);
+							Path dest = finalTargetDir.resolve(relative);
+							Files.createDirectories(dest.getParent());
+							Files.copy(p, dest, StandardCopyOption.REPLACE_EXISTING);
+						} catch (IOException e) {
+							throw new UncheckedIOException(e);
+						}
+					});
+				} catch (UncheckedIOException e) {
+					throw e.getCause();
+				}
+			}
 		}
 	}
 
@@ -813,6 +871,10 @@ public class Corvoid {
 	}
 
 	private void compileViaToolApi(CompilerOptions options) throws IOException {
+		List<Path> sources = options.walkSources(options.srcDir);
+		if (sources.isEmpty()) {
+			return;
+		}
 		JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
 		List<String> cmd = options.buildCommandLine();
 		cmd.remove(0); // drop javac
