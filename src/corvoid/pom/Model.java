@@ -47,6 +47,7 @@ public class Model {
     public int dependenciesEndOffset = -1;
 
     public static Model read(Path pomFile) throws IOException, XMLStreamException {
+        System.out.println(Thread.currentThread().getName() +  " Reading POM file: " + pomFile);
         try (var in = Files.newBufferedReader(pomFile)) {
             XMLStreamReader xml = XMLInputFactory.newInstance().createXMLStreamReader(in);
             xml.nextTag();

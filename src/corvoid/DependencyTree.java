@@ -43,53 +43,6 @@ public class DependencyTree {
 			return model.getArtifactId();
 		}
 		
-		void resolve() throws XMLStreamException, IOException {
-			children = new ArrayList<>();
-			for (Dependency dep : model.getDependencies()) {
-				Coord coord = new Coord(dep.getGroupId(), dep.getArtifactId());
-				if (!exclusions.contains(coord) && 
-						!versions.containsKey(coord) && 
-						(dep.getScope() == null || dep.getScope().equals("compile")) 
-						&& (dep.getOptional() == null || !dep.getOptional())) {
-					String version = dep.getVersion();
-					if (version == null) {
-						version = model.findManagedVersion(dep);
-					}
-					if (version == null || version.startsWith("[") || version.startsWith("(")) {
-						unconstrained.add(coord);
-					} else {
-						if (versions.putIfAbsent(coord, version) == null) {
-							unconstrained.remove(coord);
-							Node node = new Node();
-							node.depth = depth + 1;
-							node.exclusions = new HashSet<>(exclusions);
-							for (Exclusion exclusion : dep.getExclusions()) {
-								node.exclusions.add(new Coord(exclusion.getGroupId(), exclusion.getArtifactId()));
-							}
-							String finalVersion = version;
-							node.future = workspace.executor.submit(() -> workspace.resolveProject(coord, finalVersion));
-							node.source = dep;
-							children.add(node);
-						}
-					}
-				}
-			}
-			for (Node node : children) {
-				try {
-					if (node.future != null)
-						node.model = node.future.get();
-				} catch (InterruptedException | ExecutionException e) {
-					throw new RuntimeException(e);
-				}
-
-				try {
-					node.resolve();
-				} catch (Throwable t) {
-					System.err.println("XX " + node.model +  " via " + model);
-					throw t;
-				}
-			}
-		}
 
 		/* based on aioobe's http://stackoverflow.com/a/3758880 */
 		public String formatBytes(long bytes) {
@@ -186,26 +139,91 @@ public class DependencyTree {
 
 	public void resolve(Model project) throws XMLStreamException, IOException {
 		workspace.resolveImports(project);
-		Node node = new Node();
-		node.depth = 0;
-		node.exclusions = new HashSet<>();
-		node.model = project;
-		node.resolve();
-		root = node;
+		root = new Node();
+		root.depth = 0;
+		root.exclusions = new HashSet<>();
+		root.model = project;
+
+		Queue<Node> queue = new LinkedList<>();
+		queue.add(root);
+
+		while (!queue.isEmpty()) {
+			int levelSize = queue.size();
+			List<Node> currentLevelNodes = new ArrayList<>();
+
+			for (int i = 0; i < levelSize; i++) {
+				Node parent = queue.poll();
+				parent.children = new ArrayList<>();
+				for (Dependency dep : parent.model.getDependencies()) {
+					Coord coord = new Coord(dep.getGroupId(), dep.getArtifactId());
+					if (!parent.exclusions.contains(coord) &&
+							(dep.getScope() == null || dep.getScope().equals("compile"))
+							&& (dep.getOptional() == null || !dep.getOptional())) {
+
+						String version = root.model.findManagedVersion(dep);
+						if (version == null) {
+							version = dep.getVersion();
+						}
+						if (version == null) {
+							version = parent.model.findManagedVersion(dep);
+						}
+
+						if (version == null || version.startsWith("[") || version.startsWith("(")) {
+							if (!versions.containsKey(coord)) {
+								unconstrained.add(coord);
+							}
+						} else {
+							if (versions.putIfAbsent(coord, version) == null) {
+								unconstrained.remove(coord);
+								Node node = new Node();
+								node.depth = parent.depth + 1;
+								node.exclusions = new HashSet<>(parent.exclusions);
+								for (Exclusion exclusion : dep.getExclusions()) {
+									node.exclusions.add(new Coord(exclusion.getGroupId(), exclusion.getArtifactId()));
+								}
+								node.source = dep;
+								String finalVersion = version;
+								Node finalNode = node;
+								node.future = workspace.executor.submit(() -> {
+									Model m = workspace.resolveProject(coord, finalVersion);
+									finalNode.model = m;
+									return m;
+								});
+								parent.children.add(node);
+								currentLevelNodes.add(node);
+							}
+						}
+					}
+				}
+			}
+
+			for (Node node : currentLevelNodes) {
+				try {
+					node.future.get();
+				} catch (InterruptedException | ExecutionException e) {
+					throw new RuntimeException(e);
+				}
+			}
+			queue.addAll(currentLevelNodes);
+		}
 	}
 	
-	private void buildClasspath(Node node, List<Path> out) {
+	private void buildClasspath(Node node, List<Path> out, Set<Coord> seen) {
 		if (node.source != null) {
-			out.add(node.artifactPath());
+			Coord coord = node.coord();
+			if (seen.add(coord)) {
+				out.add(node.artifactPath());
+			}
 		}
-		for (Node child: node.children) {
-			buildClasspath(child, out);
+		for (Node child : node.children) {
+			buildClasspath(child, out, seen);
 		}
 	}
-	
+
 	public List<Path> classpathFiles() {
 		List<Path> files = new ArrayList<>();
-		buildClasspath(root, files);
+		Set<Coord> seen = new HashSet<>();
+		buildClasspath(root, files, seen);
 		return files;
 	}
 
