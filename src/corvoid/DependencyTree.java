@@ -84,14 +84,14 @@ public class DependencyTree {
 			String currentPrefix = "";
 			String nextPrefix = "";
 			if (depth > 0) {
-				currentPrefix = prefix + (isLast ? "└── " : "├── ");
+				currentPrefix = "\033[90m" + prefix + (isLast ? "└── " : "├── ") + "\033[0m";
 				nextPrefix = prefix + (isLast ? "    " : "│   ");
 			}
 			
 			if (model.getArtifactId().equals(model.getGroupId()) || !showGroupId) {
-				cs = String.format("%s%s %s", currentPrefix, model.getArtifactId(), version());
+				cs = String.format("%s\033[1;36m%s\033[0m \033[1;33m%s\033[0m", currentPrefix, model.getArtifactId(), version());
 			} else {
-				cs = String.format("%s%s:%s %s", currentPrefix, model.getGroupId(), model.getArtifactId(), version());
+				cs = String.format("%s\033[90m%s:\033[1;36m%s\033[0m \033[1;33m%s\033[0m", currentPrefix, model.getGroupId(), model.getArtifactId(), version());
 			}
 			long nodeTotal = totalSize();
 			String totalSizeStr = formatBytes(nodeTotal);
@@ -100,14 +100,21 @@ public class DependencyTree {
 			String percent = rootTotal > 0 ? String.format(percentValue < 10.0 ? "%.1f%%" : "%.0f%%", percentValue) : (rootTotal == 0 && nodeTotal == 0 && depth == 0 ? "100.0%" : "");
 
 			Path path = artifactPath();
+			String license = license();
+
+			String format = "%-60s %8s %8s %6s   %s\n";
+			int ansiLength = cs.length() - cs.replaceAll("\033\\[[0-9;]*m", "").length();
+			String padding = " ".repeat(Math.max(0, 60 + ansiLength - cs.length()));
+			String paddedCs = cs + padding;
+
 			if (path != null && Files.exists(path)) {
 				try {
-					out.format("%-60s %8s %8s %6s   %s\n", cs, formatBytes(Files.size(path)), totalSizeStr, percent, license());
+					out.format("%s %8s %8s %6s   %s\n", paddedCs, formatBytes(Files.size(path)), totalSizeStr, percent, license);
 				} catch (IOException e) {
-					out.format("%-60s %8s %8s %6s   %s\n", cs, "", totalSizeStr, percent, license());
+					out.format("%s %8s %8s %6s   %s\n", paddedCs, "", totalSizeStr, percent, license);
 				}
 			} else {
-				out.format("%-60s %8s %8s %6s   %s\n", cs, "", totalSizeStr, percent, license());
+				out.format("%s %8s %8s %6s   %s\n", paddedCs, "", totalSizeStr, percent, license);
 			}
 
 			if (sort) children.sort(Comparator.comparing(Node::totalSize).reversed());
@@ -273,12 +280,12 @@ public class DependencyTree {
 	}
 	
 	public void print(PrintStream out, boolean sort, boolean showGroupId) {
-		out.format("%-60s %8s %8s %6s   %s\n", "Artifact", "Size", "Total", "%", "License");
+		out.format("\033[90m%-60s %8s %8s %6s   %s\033[0m\n", "Artifact", "Size", "Total", "%", "License");
 		if (root != null) {
 			root.print(out, "", true, root.totalSize(), sort, showGroupId);
 		}
 		if (!unconstrained.isEmpty()) {
-			out.println("\nUnconstrained:");
+			out.println("\n\033[1;31mUnconstrained:\033[0m");
 			for (Coord coord : unconstrained) {
 				out.println(coord);
 			}
