@@ -2,6 +2,7 @@ package corvoid;
 
 import corvoid.pom.Dependency;
 import corvoid.pom.Exclusion;
+import corvoid.pom.License;
 import corvoid.pom.Model;
 
 import javax.xml.stream.XMLStreamException;
@@ -11,6 +12,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
 import java.util.concurrent.*;
+import java.util.stream.Collectors;
 
 public class DependencyTree {
 	Workspace workspace;
@@ -77,7 +79,7 @@ public class DependencyTree {
 			return totalSize;
 		}
 		
-		void print(PrintStream out, String prefix, boolean isLast, long rootTotal, boolean sort) {
+		void print(PrintStream out, String prefix, boolean isLast, long rootTotal, boolean sort, boolean showGroupId) {
 			String cs;
 			String currentPrefix = "";
 			String nextPrefix = "";
@@ -86,32 +88,62 @@ public class DependencyTree {
 				nextPrefix = prefix + (isLast ? "    " : "│   ");
 			}
 			
-			if (model.getArtifactId().equals(model.getGroupId())) {
+			if (model.getArtifactId().equals(model.getGroupId()) || !showGroupId) {
 				cs = String.format("%s%s %s", currentPrefix, model.getArtifactId(), version());
 			} else {
 				cs = String.format("%s%s:%s %s", currentPrefix, model.getGroupId(), model.getArtifactId(), version());
 			}
 			long nodeTotal = totalSize();
 			String totalSizeStr = formatBytes(nodeTotal);
+			if (children.isEmpty() || nodeTotal == 0) totalSizeStr = "";
 			double percentValue = 100.0 * nodeTotal / rootTotal;
 			String percent = rootTotal > 0 ? String.format(percentValue < 10.0 ? "%.1f%%" : "%.0f%%", percentValue) : (rootTotal == 0 && nodeTotal == 0 && depth == 0 ? "100.0%" : "");
 
 			Path path = artifactPath();
 			if (path != null && Files.exists(path)) {
 				try {
-					out.format("%-60s %8s %8s %6s\n", cs, formatBytes(Files.size(path)), totalSizeStr, percent);
+					out.format("%-60s %8s %8s %6s   %s\n", cs, formatBytes(Files.size(path)), totalSizeStr, percent, license());
 				} catch (IOException e) {
-					out.format("%-60s %8s %8s %6s\n", cs, "", totalSizeStr, percent);
+					out.format("%-60s %8s %8s %6s   %s\n", cs, "", totalSizeStr, percent, license());
 				}
 			} else {
-				out.format("%-60s %8s %8s %6s\n", cs, "", totalSizeStr, percent);
+				out.format("%-60s %8s %8s %6s   %s\n", cs, "", totalSizeStr, percent, license());
 			}
 
 			if (sort) children.sort(Comparator.comparing(Node::totalSize).reversed());
 
 			for (int i = 0; i < children.size(); i++) {
-				children.get(i).print(out, nextPrefix, i == children.size() - 1, rootTotal, sort);
+				children.get(i).print(out, nextPrefix, i == children.size() - 1, rootTotal, sort, showGroupId);
 			}
+		}
+
+        private String license() {
+			if (model.getLicenses() == null || model.getLicenses().isEmpty()) return "";
+			return model.getLicenses().stream().map(License::getName)
+					.filter(Objects::nonNull)
+					.map(Node::normalizeLicenseName)
+					.distinct()
+					.sorted()
+					.collect(Collectors.joining(", "));
+		}
+
+		private static String normalizeLicenseName(String name) {
+			return switch (name) {
+				case "Apache License, Version 2.0", "The Apache Software License, Version 2.0",
+					 "The Apache License, Version 2.0", "Apache 2.0 license", "Apache License 2.0",
+					 "Apache-2.0" -> "Apache 2.0";
+				case "The MIT License", "MIT License" -> "MIT";
+				case "BSD License" -> "BSD";
+				case "GNU General Public License, version 2 with the GNU Classpath Exception", "GPL2 w/ CPE" -> "GPLv2 w/ CPE";
+
+				case "GNU General Public License v3.0" -> "GPLv3";
+				case "GNU Lesser General Public License" -> "LGPL";
+				case "GNU Lesser General Public License version 2.1 or later" -> "LGPLv2.1+";
+				case "Mozilla Public License 1.1 (MPL 1.1)" -> "MPL 1.1";
+				case "GNU Lesser General Public License (LGPL)" -> "LGPL";
+				case "Eclipse Public License v. 2.0" -> "EPL 2.0";
+				default -> name;
+			};
 		}
 
 		Coord coord() {
@@ -240,10 +272,10 @@ public class DependencyTree {
 		return String.join(":", classpathStrings());
 	}
 	
-	public void print(PrintStream out, boolean sort) {
-		out.format("%-60s %8s %8s %6s\n", "Artifact", "Size", "Total", "%");
+	public void print(PrintStream out, boolean sort, boolean showGroupId) {
+		out.format("%-60s %8s %8s %6s   %s\n", "Artifact", "Size", "Total", "%", "License");
 		if (root != null) {
-			root.print(out, "", true, root.totalSize(), sort);
+			root.print(out, "", true, root.totalSize(), sort, showGroupId);
 		}
 		if (!unconstrained.isEmpty()) {
 			out.println("\nUnconstrained:");

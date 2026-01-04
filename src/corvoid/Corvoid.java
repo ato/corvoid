@@ -291,7 +291,7 @@ public class Corvoid {
 			case "classpath": System.out.println(tree().classpath()); break;
 			case "deps": tree().fetchDependencies(); break;
 			case "search": search(args[1]); break;
-			case "tree": tree().print(System.out, args.length > 1 && "-s".equals(args[1])); break;
+			case "tree": printTree(args); break;
 			case "compile": compile(); break;
 			case "run": run(args); break;
 			case "jar": jar(); break;
@@ -302,6 +302,28 @@ public class Corvoid {
 			case "update": update(args); break;
 			default: usage();
 		}
+	}
+
+	private void printTree(String[] args) throws XMLStreamException, IOException {
+		boolean sort = false, showGroupId = false;
+		for (int i = 1; i < args.length; i++) {
+            switch (args[i]) {
+                case "-s" -> sort = true;
+				case "-g" -> showGroupId = true;
+                default -> {
+					System.err.println("Unknown option: " + args[i]);
+					System.err.println("""
+							Usage: corvoid tree [-s] [-g]
+							Print a dependency tree
+							
+							-s Sort by size
+							-g Show group IDs
+							""");
+                    System.exit(1);
+                }
+            }
+		}
+		tree().print(System.out, sort, showGroupId);
 	}
 
 	@SuppressWarnings("unchecked")
