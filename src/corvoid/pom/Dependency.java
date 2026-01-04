@@ -148,5 +148,21 @@ public class Dependency {
     public Boolean getOptional() {
         return optional;
     }
+
+    public void setGroupId(String groupId) {
+        this.groupId = groupId;
+    }
+
+    public void setArtifactId(String artifactId) {
+        this.artifactId = artifactId;
+    }
+
+    public void setVersion(String version) {
+        this.version = version;
+    }
+
+    public void setScope(String scope) {
+        this.scope = scope;
+    }
 }
 

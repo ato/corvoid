@@ -195,8 +195,10 @@ public class DependencyTree {
 				parent.children = new ArrayList<>();
 				for (Dependency dep : parent.model.getDependencies()) {
 					Coord coord = new Coord(dep.getGroupId(), dep.getArtifactId());
-					if (!parent.exclusions.contains(coord) &&
-							(dep.getScope() == null || dep.getScope().equals("compile"))
+					String scope = dep.getScope();
+					boolean scopeOk = scope == null || scope.equals("compile") || scope.equals("runtime")
+							|| (parent == root && scope.equals("test"));
+					if (!parent.exclusions.contains(coord) && scopeOk
 							&& (dep.getOptional() == null || !dep.getOptional())) {
 
 						String version = root.model.findManagedVersion(dep);

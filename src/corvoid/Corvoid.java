@@ -274,6 +274,7 @@ public class Corvoid {
 		System.out.println("  outdated   - check for newer versions of dependencies");
 		System.out.println("  run        - run a class");
 		System.out.println("  search     - search Maven Central for artifacts");
+		System.out.println("  test       - run unit tests");
 		System.out.println("  tree [-s]  - print a dependency tree");
 		System.out.println("  uberjar    - build a standalone jar file");
 		System.out.println("  update     - update dependencies to latest stable versions");
@@ -293,6 +294,7 @@ public class Corvoid {
 			case "search": search(args[1]); break;
 			case "tree": printTree(args); break;
 			case "compile": compile(); break;
+			case "test": test(args); break;
 			case "run": run(args); break;
 			case "jar": jar(); break;
 			case "uberjar": uberjar(); break;
@@ -609,6 +611,7 @@ public class Corvoid {
 		Path srcDir, outDir;
 		String classpath;
 		boolean verbose = false;
+		boolean junit5 = false;
 		
 		List<Path> walkSources(Path srcDir) throws IOException {
 			List<Path> list = new ArrayList<>();
@@ -641,24 +644,142 @@ public class Corvoid {
 	}
 
 	private CompilerOptions buildCompilerOptions() throws IOException, XMLStreamException {
+		return buildCompilerOptions(false);
+	}
+
+	private CompilerOptions buildCompilerOptions(boolean test) throws IOException, XMLStreamException {
+		CompilerOptions options = new CompilerOptions();
 		Model project = new Model(superPom(), parseModel());
 		Interpolator.interpolate(project);
+		if (test) {
+			options.junit5 = injectJUnit5ConsoleRunner(project);
+		}
 		DependencyTree tree = new DependencyTree(workspace);
 		tree.resolve(project);
-		CompilerOptions options = new CompilerOptions();
+		tree.fetchDependencies();
 		options.classpath = tree.classpath();
-		String srcDir = project.getBuild().getSourceDirectory();
-		options.srcDir = Path.of(srcDir != null ? srcDir : "src");
-		String outDir = project.getBuild().getOutputDirectory();
-		options.outDir = Path.of(outDir != null ? outDir : "target/classes");
+		if (test) {
+			String srcDir = project.getBuild().getTestSourceDirectory();
+			options.srcDir = Path.of(srcDir != null ? srcDir : "test");
+			String outDir = project.getBuild().getTestOutputDirectory();
+			options.outDir = Path.of(outDir != null ? outDir : "target/test-classes");
+			String mainOutDir = project.getBuild().getOutputDirectory();
+			options.classpath = (mainOutDir != null ? mainOutDir : "target/classes") + ":" + options.classpath;
+		} else {
+			String srcDir = project.getBuild().getSourceDirectory();
+			options.srcDir = Path.of(srcDir != null ? srcDir : "src");
+			String outDir = project.getBuild().getOutputDirectory();
+			options.outDir = Path.of(outDir != null ? outDir : "target/classes");
+		}
 		return options;
 	}
-	
+
 	private void compile() throws XMLStreamException, IOException {
 		CompilerOptions options = buildCompilerOptions();
+		if (!Files.exists(options.outDir)) {
+			Files.createDirectories(options.outDir);
+		}
 		System.out.println("Compiling");
 		compileViaToolApi(options);
 		clearLine();
+	}
+
+	private void compileTests() throws XMLStreamException, IOException {
+		CompilerOptions options = buildCompilerOptions(true);
+		if (!Files.exists(options.outDir)) {
+			Files.createDirectories(options.outDir);
+		}
+		System.out.println("Compiling tests");
+		compileViaToolApi(options);
+		clearLine();
+	}
+
+	private void test(String[] args) throws XMLStreamException, IOException {
+		compile();
+		compileTests();
+		CompilerOptions options = buildCompilerOptions(true);
+		String classpath = options.outDir + ":" + options.classpath;
+		List<String> testClasses = findTestClasses(options.outDir);
+		if (testClasses.isEmpty()) {
+			System.out.println("No tests found");
+			return;
+		}
+
+		List<String> command = new ArrayList<>();
+		command.add("java");
+		command.add("-cp");
+		command.add(classpath);
+
+		if (options.junit5) {
+			command.add("org.junit.platform.console.ConsoleLauncher");
+			command.add("execute");
+			command.add("--scan-class-path");
+			command.add("--disable-banner");
+            command.addAll(Arrays.asList(args).subList(1, args.length));
+		} else {
+			command.add("org.junit.runner.JUnitCore");
+			command.addAll(testClasses);
+		}
+
+		try {
+			new ProcessBuilder().command(command)
+					.redirectError(Redirect.INHERIT)
+					.redirectOutput(Redirect.INHERIT)
+					.start().waitFor();
+		} catch (InterruptedException e) {
+			throw new RuntimeException(e);
+		}
+	}
+
+	private boolean injectJUnit5ConsoleRunner(Model project) {
+		boolean hasJUnit5 = false;
+		boolean hasConsoleRunner = false;
+		String junitPlatformVersion = "1.10.0"; // Default
+
+		for (Dependency dep : project.getDependencies()) {
+			String gid = dep.getGroupId();
+			String aid = dep.getArtifactId();
+			if (gid != null && (gid.equals("org.junit.jupiter") || gid.equals("org.junit.platform"))) {
+				hasJUnit5 = true;
+				if (aid != null && (aid.equals("junit-platform-console-standalone") || aid.equals("junit-platform-console"))) {
+					hasConsoleRunner = true;
+				}
+				if (dep.getVersion() != null) {
+					junitPlatformVersion = dep.getVersion();
+				}
+			}
+		}
+
+		if (hasJUnit5 && !hasConsoleRunner) {
+			Dependency console = new Dependency();
+			console.setGroupId("org.junit.platform");
+			console.setArtifactId("junit-platform-console");
+			console.setVersion(junitPlatformVersion);
+			console.setScope("test");
+			project.getDependencies().add(console);
+		}
+		return hasJUnit5;
+	}
+
+	private List<String> findTestClasses(Path testOutDir) throws IOException {
+		List<String> testClasses = new ArrayList<>();
+		if (!Files.exists(testOutDir)) {
+			return testClasses;
+		}
+		Files.walkFileTree(testOutDir, new SimpleFileVisitor<Path>() {
+			@Override
+			public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
+				String name = file.getFileName().toString();
+				if (name.endsWith(".class") && !name.contains("$")) {
+					Path relative = testOutDir.relativize(file);
+					String className = relative.toString().replace(File.separatorChar, '.');
+					className = className.substring(0, className.length() - ".class".length());
+					testClasses.add(className);
+				}
+				return FileVisitResult.CONTINUE;
+			}
+		});
+		return testClasses;
 	}
 
 	private void compileViaToolApi(CompilerOptions options) throws IOException {
