@@ -1,6 +1,6 @@
 package corvoid;
 
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -13,9 +13,9 @@ import java.nio.file.attribute.BasicFileAttributes;
 import java.util.Arrays;
 import java.util.List;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class CorvoidTest {
     @Test
@@ -63,12 +63,12 @@ public class CorvoidTest {
 
             // Check if both are present and sorted
             // junit:junit should come before org.yaml:snakeyaml
-            assertTrue("Output should contain junit:junit update", output.contains("junit:junit 4.13.1 ->"));
-            assertTrue("Output should contain snakeyaml update", output.contains("org.yaml:snakeyaml 1.27 ->"));
+            assertTrue(output.contains("junit:junit 4.13.1 ->"), "Output should contain junit:junit update");
+            assertTrue(output.contains("org.yaml:snakeyaml 1.27 ->"), "Output should contain snakeyaml update");
             
             if (lines.size() >= 2) {
-                assertTrue("Output should be sorted: " + output, lines.get(0).startsWith("junit:junit"));
-                assertTrue("Output should be sorted: " + output, lines.get(1).startsWith("org.yaml:snakeyaml"));
+                assertTrue(lines.get(0).startsWith("junit:junit"), "Output should be sorted: " + output);
+                assertTrue(lines.get(1).startsWith("org.yaml:snakeyaml"), "Output should be sorted: " + output);
             }
         } finally {
             deleteDirectory(tempDir);
@@ -110,7 +110,7 @@ public class CorvoidTest {
             }
 
             String output = out.toString();
-            assertTrue("Output should contain junit:junit update from DM", output.contains("junit:junit 4.13.1 ->"));
+            assertTrue(output.contains("junit:junit 4.13.1 ->"), "Output should contain junit:junit update from DM");
         } finally {
             deleteDirectory(tempDir);
         }
@@ -168,8 +168,8 @@ public class CorvoidTest {
             String output = out.toString();
             // Currently, it should pick 1.1.0-beta1 because it uses <release>
             // We want it to pick 1.0.1 and ignore alpha/beta.
-            assertTrue("Output should contain update to 1.0.1, but was: " + output, output.contains("org.example:example-art 1.0.0 -> 1.0.1"));
-            assertFalse("Output should NOT contain update to 1.1.0-beta1", output.contains("1.1.0-beta1"));
+            assertTrue(output.contains("org.example:example-art 1.0.0 -> 1.0.1"), "Output should contain update to 1.0.1, but was: " + output);
+            assertFalse(output.contains("1.1.0-beta1"), "Output should NOT contain update to 1.1.0-beta1");
         } finally {
             deleteDirectory(tempDir);
             deleteDirectory(repoRoot);

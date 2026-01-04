@@ -1,7 +1,7 @@
 package corvoid;
 
-import org.junit.Test;
-import static org.junit.Assert.*;
+import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.*;
 
 public class VersionTest {
 
@@ -13,14 +13,14 @@ public class VersionTest {
         for (int i = 0; i < versions.length - 1; i++) {
             String v1 = versions[i];
             String v2 = versions[i + 1];
-            assertTrue(v1 + " should be less than " + v2, compare(v1, v2) < 0);
-            assertTrue(v2 + " should be greater than " + v1, compare(v2, v1) > 0);
+            assertTrue(compare(v1, v2) < 0, v1 + " should be less than " + v2);
+            assertTrue(compare(v2, v1) > 0, v2 + " should be greater than " + v1);
         }
     }
 
     private void assertEqualsVersion(String v1, String v2) {
-        assertEquals(v1 + " should be equal to " + v2, 0, compare(v1, v2));
-        assertEquals(v2 + " should be equal to " + v1, 0, compare(v2, v1));
+        assertEquals(0, compare(v1, v2), v1 + " should be equal to " + v2);
+        assertEquals(0, compare(v2, v1), v2 + " should be equal to " + v1);
         assertEquals(new Version(v1), new Version(v2));
     }
 

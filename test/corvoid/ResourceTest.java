@@ -1,6 +1,6 @@
 package corvoid;
 
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.FileVisitResult;
@@ -8,7 +8,7 @@ import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.io.IOException;
 
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ResourceTest {
 
@@ -46,15 +46,15 @@ public class ResourceTest {
             Corvoid corvoid = new Corvoid(tempDir);
             corvoid.command(new String[]{"compile"});
 
-            assertTrue("config.properties should be copied", Files.exists(tempDir.resolve("target/classes/config.properties")));
-            assertTrue("extra.txt should be copied to subdir", Files.exists(tempDir.resolve("target/classes/subdir/extra.txt")));
+            assertTrue(Files.exists(tempDir.resolve("target/classes/config.properties")), "config.properties should be copied");
+            assertTrue(Files.exists(tempDir.resolve("target/classes/subdir/extra.txt")), "extra.txt should be copied to subdir");
             
             // Test update
             Thread.sleep(1000); // Ensure timestamp change
             Files.writeString(resDir.resolve("config.properties"), "key=newvalue");
             corvoid.command(new String[]{"compile"});
             
-            assertTrue("config.properties should be updated", Files.readString(tempDir.resolve("target/classes/config.properties")).contains("newvalue"));
+            assertTrue(Files.readString(tempDir.resolve("target/classes/config.properties")).contains("newvalue"), "config.properties should be updated");
 
         } finally {
             deleteDirectory(tempDir);

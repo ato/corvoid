@@ -1,9 +1,11 @@
 package corvoid;
 
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
+
+import static org.junit.jupiter.api.Assertions.*;
+
 import java.io.*;
 import java.nio.file.*;
-import static org.junit.Assert.*;
 
 public class AddTest {
     @Test
@@ -27,12 +29,12 @@ public class AddTest {
             
             String content = Files.readString(pom);
             // It should update 1.0 to 2.0 and NOT add a second dependency block
-            assertTrue("Should contain version 2.0", content.contains("<version>2.0</version>"));
-            assertFalse("Should not contain version 1.0", content.contains("<version>1.0</version>"));
+            assertTrue(content.contains("<version>2.0</version>"));
+            assertFalse(content.contains("<version>1.0</version>"));
             
             int firstIdx = content.indexOf("<dependency>");
             int lastIdx = content.lastIndexOf("<dependency>");
-            assertEquals("Should only have one dependency block", firstIdx, lastIdx);
+            assertEquals(firstIdx, lastIdx);
         } finally {
             deleteDirectory(tempDir);
         }
@@ -60,9 +62,9 @@ public class AddTest {
             corvoid.add("org.example:example-art", "2.0");
             
             String content = Files.readString(pom);
-            assertTrue("Should contain version 2.0", content.contains("<version>2.0</version>"));
-            assertTrue("Should preserve scope", content.contains("<scope>test</scope>"));
-            assertTrue("Should preserve classifier", content.contains("<classifier>sources</classifier>"));
+            assertTrue(content.contains("<version>2.0</version>"), "Should contain version 2.0");
+            assertTrue(content.contains("<scope>test</scope>"), "Should preserve scope");
+            assertTrue(content.contains("<classifier>sources</classifier>"), "Should preserve classifier");
         } finally {
             deleteDirectory(tempDir);
         }
@@ -88,7 +90,7 @@ public class AddTest {
             corvoid.add("org.example:example-art", "2.0");
             
             String content = Files.readString(pom);
-            assertTrue("Should contain version 2.0", content.contains("<version>2.0</version>"));
+            assertTrue(content.contains("<version>2.0</version>"));
             // Fallback logic currently loses scope if no version tag was present
             // but let's see what happens.
         } finally {
@@ -116,14 +118,14 @@ public class AddTest {
             corvoid.add("org.other:other-art", "1.5");
             
             String content = Files.readString(pom);
-            assertTrue("Should contain original dependency", content.contains("example-art"));
-            assertTrue("Should contain original version", content.contains("<version>1.0</version>"));
-            assertTrue("Should contain new dependency", content.contains("other-art"));
-            assertTrue("Should contain new version", content.contains("<version>1.5</version>"));
+            assertTrue(content.contains("example-art"));
+            assertTrue(content.contains("<version>1.0</version>"));
+            assertTrue(content.contains("other-art"));
+            assertTrue(content.contains("<version>1.5</version>"));
             
             int firstIdx = content.indexOf("<dependency>");
             int lastIdx = content.lastIndexOf("<dependency>");
-            assertNotEquals("Should have two dependency blocks", firstIdx, lastIdx);
+            assertNotEquals(firstIdx, lastIdx);
         } finally {
             deleteDirectory(tempDir);
         }

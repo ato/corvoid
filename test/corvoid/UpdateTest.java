@@ -1,10 +1,10 @@
 package corvoid;
 
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 import java.io.*;
 import java.nio.file.*;
-import java.util.List;
-import static org.junit.Assert.*;
+
+import static org.junit.jupiter.api.Assertions.*;
 
 public class UpdateTest {
 
@@ -31,8 +31,8 @@ public class UpdateTest {
             String content = Files.readString(pom);
             // We don't know the exact latest version, but it should be different from 3.1.0 if an update was found.
             // xmlbeans 3.1.0 is quite old.
-            assertFalse("Should not contain old version 3.1.0", content.contains("<version>3.1.0</version>"));
-            assertTrue("Should contain some version tag", content.contains("<version>"));
+            assertFalse(content.contains("<version>3.1.0</version>"), "Should not contain old version 3.1.0");
+            assertTrue(content.contains("<version>"), "Should contain some version tag");
         } finally {
             deleteDirectory(tempDir);
         }
@@ -80,8 +80,8 @@ public class UpdateTest {
             corvoid.command(new String[]{"update", "org.apache.xmlbeans:xmlbeans"});
             
             String content = Files.readString(pom);
-            assertFalse("xmlbeans should be updated", content.contains("<version>3.1.0</version>"));
-            assertTrue("jdbi should NOT be updated", content.contains("<version>3.10.0</version>"));
+            assertFalse(content.contains("<version>3.1.0</version>"), "xmlbeans should be updated");
+            assertTrue(content.contains("<version>3.10.0</version>"), "jdbi should NOT be updated");
         } finally {
             deleteDirectory(tempDir);
         }
@@ -116,7 +116,7 @@ public class UpdateTest {
             corvoid.command(new String[]{"update"});
 
             String content = Files.readString(pom);
-            assertFalse("dependencyManagement version should be updated", content.contains("<version>3.1.0</version>"));
+            assertFalse(content.contains("<version>3.1.0</version>"), "dependencyManagement version should be updated");
 
             // Check if it added a version to the dependencies section
             int depsIndex = content.indexOf("<dependencies>");
@@ -125,7 +125,7 @@ public class UpdateTest {
 
             // projectDepsIndex should be the one in <dependencies> (not management)
             String dependenciesSection = content.substring(projectDepsIndex);
-            assertFalse("Should NOT have added version to dependencies section", dependenciesSection.contains("<version>"));
+            assertFalse(dependenciesSection.contains("<version>"), "Should NOT have added version to dependencies section");
         } finally {
             deleteDirectory(tempDir);
         }
@@ -156,20 +156,20 @@ public class UpdateTest {
             corvoid.command(new String[]{"update"});
 
             String content = Files.readString(pom);
-            assertFalse("xmlbeans should be updated", content.contains("<version>3.1.0</version>"));
-            assertFalse("jdbi should be updated", content.contains("<version>3.10.0</version>"));
-            assertTrue("Should still have xmlbeans", content.contains("xmlbeans"));
-            assertTrue("Should still have jdbi3-sqlite", content.contains("jdbi3-sqlite"));
+            assertFalse(content.contains("<version>3.1.0</version>"), "xmlbeans should be updated");
+            assertFalse(content.contains("<version>3.10.0</version>"), "jdbi should be updated");
+            assertTrue(content.contains("xmlbeans"), "Should still have xmlbeans");
+            assertTrue(content.contains("jdbi3-sqlite"), "Should still have jdbi3-sqlite");
             
             // Check for potential corruption
-            assertTrue("Should have proper project closing tag", content.contains("</project>"));
+            assertTrue(content.contains("</project>"), "Should have proper project closing tag");
             int count = 0;
             int lastIndex = 0;
             while ((lastIndex = content.indexOf("<dependency>", lastIndex)) != -1) {
                 count++;
                 lastIndex += "<dependency>".length();
             }
-            assertEquals("Should have exactly 2 dependencies", 2, count);
+            assertEquals(2, count, "Should have exactly 2 dependencies");
         } finally {
             deleteDirectory(tempDir);
         }
@@ -221,7 +221,7 @@ public class UpdateTest {
             
             int projectDepsIndex = content.lastIndexOf("<dependencies>");
             String dependenciesSection = content.substring(projectDepsIndex);
-            assertFalse("Should NOT have added version to jackson-databind in dependencies section", dependenciesSection.contains("<version>"));
+            assertFalse(dependenciesSection.contains("<version>"), "Should NOT have added version to jackson-databind in dependencies section");
         } finally {
             deleteDirectory(tempDir);
         }

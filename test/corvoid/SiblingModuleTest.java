@@ -1,15 +1,14 @@
 package corvoid;
 
-import corvoid.pom.Model;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import javax.xml.stream.XMLStreamException;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class SiblingModuleTest {
 
@@ -78,7 +77,7 @@ public class SiblingModuleTest {
             assertEquals("child1", child1Node.getModel().getArtifactId());
             
             Path child1Path = child1Node.artifactPath();
-            assertTrue("Path should point to target/classes: " + child1Path, child1Path.endsWith(Path.of("child1/target/classes")));
+            assertTrue(child1Path.endsWith(Path.of("child1/target/classes")), "Path should point to target/classes: " + child1Path);
             
         } finally {
             deleteDirectory(tempDir);
