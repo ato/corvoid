@@ -19,13 +19,14 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Cache for storing and retrieving artifacts from remote repositories.
  */
 class Cache {
 	private final Path root;
-	private final HttpClient httpClient = HttpClient.newHttpClient();
+	private volatile HttpClient httpClient;
 	private final Map<Path, CompletableFuture<Path>> pendingDownloads = new ConcurrentHashMap<>();
 
 	Cache(Path root) {
@@ -34,6 +35,17 @@ class Cache {
 		}
 		this.root = root;
     }
+
+	private HttpClient httpClient() {
+		if (httpClient == null) {
+			synchronized (this) {
+				if (httpClient == null) {
+					httpClient = HttpClient.newBuilder().build();
+				}
+			}
+		}
+		return httpClient;
+	}
 
 	private Path groupDir(String groupId) {
 		return root.resolve(groupId.replace('.', '/'));
@@ -92,7 +104,7 @@ class Cache {
 			System.out.println("Fetching " + uri);
 			HttpRequest request = HttpRequest.newBuilder().uri(uri).build();
 			Path tmpFile = Path.of(path + ".tmp");
-			return httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofFile(tmpFile))
+			return httpClient().sendAsync(request, HttpResponse.BodyHandlers.ofFile(tmpFile))
 					.thenApply(response -> {
 						try {
 							if (response.statusCode() == 200) {
