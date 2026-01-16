@@ -730,7 +730,18 @@ public class Corvoid {
 
 	private CompilerOptions buildCompilerOptions(boolean test) throws IOException, XMLStreamException {
 		CompilerOptions options = new CompilerOptions();
-		Model project = new Model(superPom(), parseModel());
+		Model project = parseModel();
+		Path currentRoot = projectRoot;
+		if (project.getParent() != null && project.getParent().getArtifactId() != null) {
+			String relativePath = project.getParent().getRelativePath();
+			if (relativePath == null) relativePath = "../pom.xml";
+			Path parentPom = projectRoot.resolve(relativePath).normalize();
+			Model parent = Model.read(parentPom);
+			project = new Model(parent, project);
+			currentRoot = parentPom.getParent();
+		}
+		workspace.scanModules(currentRoot);
+		project = new Model(superPom(), project);
 		Interpolator.interpolate(project);
 		if (test) {
 			options.junit5 = injectJUnit5ConsoleRunner(project);
@@ -809,11 +820,19 @@ public class Corvoid {
 			if (!Files.exists(options.outDir)) {
 				Files.createDirectories(options.outDir);
 			}
-			System.out.println("Compiling");
-			compileViaToolApi(options);
+			long start = System.currentTimeMillis();
+			System.out.format("Compiling \033[1;36m%s\033[0m... ", model.getArtifactId());
+			System.out.flush();
+			boolean success = compileViaToolApi(options);
 			copyResources(options);
 			Files.setLastModifiedTime(options.outDir, FileTime.from(Instant.now()));
-			clearLine();
+			long duration = System.currentTimeMillis() - start;
+			if (success) {
+				System.out.format("\033[1;32m✓\033[0m [%d ms]%n", duration);
+			} else {
+				System.out.format("\033[1;31m✗\033[0m [%d ms]%n", duration);
+				System.exit(1);
+			}
 		}
 	}
 
@@ -830,11 +849,19 @@ public class Corvoid {
 			if (!Files.exists(options.outDir)) {
 				Files.createDirectories(options.outDir);
 			}
-			System.out.println("Compiling tests");
-			compileViaToolApi(options);
+			long start = System.currentTimeMillis();
+			System.out.format("Compiling \033[1;36m%s\033[0m tests... ", model.getArtifactId());
+			System.out.flush();
+			boolean success = compileViaToolApi(options);
 			copyResources(options);
 			Files.setLastModifiedTime(options.outDir, FileTime.from(Instant.now()));
-			clearLine();
+			long duration = System.currentTimeMillis() - start;
+			if (success) {
+				System.out.format("\033[1;32m✓\033[0m [%d ms]%n", duration);
+			} else {
+				System.out.format("\033[1;31m✗\033[0m [%d ms]%n", duration);
+				System.exit(1);
+			}
 		}
 	}
 
@@ -959,15 +986,15 @@ public class Corvoid {
 		return testClasses;
 	}
 
-	private void compileViaToolApi(CompilerOptions options) throws IOException {
+	private boolean compileViaToolApi(CompilerOptions options) throws IOException {
 		List<Path> sources = options.walkSources(options.srcDir);
 		if (sources.isEmpty()) {
-			return;
+			return true;
 		}
 		JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
 		List<String> cmd = options.buildCommandLine();
 		cmd.remove(0); // drop javac
-		compiler.run(null, null, null, cmd.toArray(new String[0]));
+		return compiler.run(null, null, null, cmd.toArray(new String[0])) == 0;
 	}
 
 	private void compileExternal(CompilerOptions options) throws IOException, InterruptedException {
