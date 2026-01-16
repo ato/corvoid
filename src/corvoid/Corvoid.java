@@ -41,7 +41,16 @@ public class Corvoid {
 	private final Workspace workspace;
 
 	public Corvoid() {
-		this(Path.of(System.getProperty("user.dir")), null);
+		this(findProjectRoot(Path.of(System.getProperty("user.dir"))), null);
+	}
+
+	private static Path findProjectRoot(Path start) {
+		for (Path p = start.toAbsolutePath(); p != null; p = p.getParent()) {
+			if (Files.exists(p.resolve("pom.xml"))) {
+				return p;
+			}
+		}
+		return start.toAbsolutePath();
 	}
 
 	public Corvoid(Path projectRoot) {
@@ -261,6 +270,61 @@ public class Corvoid {
 		return Model.read(projectRoot.resolve("pom.xml"));
 	}
 
+	public void tag() throws XMLStreamException, IOException, InterruptedException {
+		Model model = parseModel();
+		String currentVersion = model.getVersion();
+		String tagVersion = currentVersion.replace("-SNAPSHOT", "");
+		System.out.print("Tag version [" + tagVersion + "]: ");
+		BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
+		String input = reader.readLine();
+		if (input != null && !input.isBlank()) {
+			tagVersion = input;
+		}
+
+		String tagName = "v" + tagVersion;
+		System.out.println("Tagging " + tagName);
+
+		if (model.versionStartOffset >= 0 && model.versionEndOffset >= 0) {
+			splicePom(model.versionStartOffset, "<version>" + tagVersion + "</version>",
+					model.versionEndOffset - model.versionStartOffset);
+		}
+
+		exec("git", "add", "pom.xml");
+		exec("git", "commit", "-m", "Release " + tagVersion);
+		exec("git", "tag", tagName);
+
+		String nextVersion = bumpVersion(tagVersion) + "-SNAPSHOT";
+		System.out.println("Bumping to " + nextVersion);
+		if (model.versionStartOffset >= 0 && model.versionEndOffset >= 0) {
+			splicePom(model.versionStartOffset, "<version>" + nextVersion + "</version>",
+					model.versionEndOffset - model.versionStartOffset);
+		}
+		exec("git", "add", "pom.xml");
+		exec("git", "commit", "-m", "Bump version to " + nextVersion);
+	}
+
+	private void exec(String... command) throws IOException, InterruptedException {
+		int exitCode = new ProcessBuilder().command(command)
+				.redirectError(Redirect.INHERIT)
+				.redirectOutput(Redirect.INHERIT)
+				.redirectInput(Redirect.INHERIT)
+				.start().waitFor();
+		if (exitCode != 0) {
+			System.exit(exitCode);
+		}
+	}
+
+	private String bumpVersion(String version) {
+		String[] parts = version.split("\\.");
+		try {
+			int last = Integer.parseInt(parts[parts.length - 1]);
+			parts[parts.length - 1] = String.valueOf(last + 1);
+			return String.join(".", parts);
+		} catch (NumberFormatException e) {
+			return version + ".1";
+		}
+	}
+
 	private void usage() {
 		System.out.println("corvoid COMMAND");
 		System.out.println("Fetch dependencies and build Java projects");
@@ -276,6 +340,7 @@ public class Corvoid {
 		System.out.println("  outdated   - check for newer versions of dependencies");
 		System.out.println("  run        - run a class");
 		System.out.println("  search     - search Maven Central for artifacts");
+		System.out.println("  tag        - create a git tag and bump the version");
 		System.out.println("  test       - run unit tests");
 		System.out.println("  tree [-s]  - print a dependency tree");
 		System.out.println("  uberjar    - build a standalone jar file");
@@ -287,13 +352,21 @@ public class Corvoid {
 	public void command(String[] args) throws XMLStreamException, IOException, InterruptedException {
 		if (args.length == 0)
 			usage();
+		if (args[0].equals("new")) {
+			newProject(args[1]);
+			return;
+		}
+		if (!Files.exists(projectRoot.resolve("pom.xml"))) {
+			System.err.println("No pom.xml found in " + projectRoot + " or its ancestors");
+			System.exit(1);
+		}
 		switch (args[0]) {
 			case "add": add(args[1], args[2]); break;
-			case "new": newProject(args[1]); break;
 			case "clean": clean(); break;
 			case "classpath": System.out.println(tree().classpath()); break;
 			case "deps": tree().fetchDependencies(); break;
 			case "search": search(args[1]); break;
+			case "tag": tag(); break;
 			case "tree": printTree(args); break;
 			case "compile": compile(); break;
 			case "test": test(args); break;
@@ -578,13 +651,13 @@ public class Corvoid {
 		}
 	}
 
-	private void run(String[] args) throws XMLStreamException, IOException {
-		DependencyTree tree = tree();
-		String classpath = tree.classpath();
+	private void run(String[] args) throws XMLStreamException, IOException, InterruptedException {
+		CompilerOptions options = buildCompilerOptions();
+		String classpath = options.outDir + ":" + options.classpath;
 		List<String> command = new ArrayList<>();
 		command.add("java");
 		command.add("-cp");
-		command.add("target/classes:" + classpath);
+		command.add(classpath);
 		if (args.length > 1 && !args[1].equals("--")) {
 			command.addAll(Arrays.asList(args).subList(1, args.length));
 		} else {
@@ -598,15 +671,7 @@ public class Corvoid {
 			command.add(mainClass);
 			if (args.length > 1) command.addAll(Arrays.asList(args).subList(2, args.length));
 		}
-		try {
-			new ProcessBuilder().command(command)
-			.redirectError(Redirect.INHERIT)
-			.redirectOutput(Redirect.INHERIT)
-			.redirectInput(Redirect.INHERIT)
-			.start().waitFor();
-		} catch (InterruptedException e) {
-			throw new RuntimeException(e);
-		}
+		exec(command.toArray(new String[0]));
 	}
 
 	private static class CompilerOptions {
@@ -782,7 +847,7 @@ public class Corvoid {
 		}
 	}
 
-	private void test(String[] args) throws XMLStreamException, IOException {
+	private void test(String[] args) throws XMLStreamException, IOException, InterruptedException {
 		compile();
 		compileTests();
 		CompilerOptions options = buildCompilerOptions(true);
@@ -809,14 +874,7 @@ public class Corvoid {
 			command.addAll(testClasses);
 		}
 
-		try {
-			new ProcessBuilder().command(command)
-					.redirectError(Redirect.INHERIT)
-					.redirectOutput(Redirect.INHERIT)
-					.start().waitFor();
-		} catch (InterruptedException e) {
-			throw new RuntimeException(e);
-		}
+		exec(command.toArray(new String[0]));
 	}
 
 	private boolean injectJUnit5ConsoleRunner(Model project) {
@@ -881,21 +939,14 @@ public class Corvoid {
 		compiler.run(null, null, null, cmd.toArray(new String[0]));
 	}
 
-	private void compileExternal(CompilerOptions options) throws IOException {
+	private void compileExternal(CompilerOptions options) throws IOException, InterruptedException {
 		List<String> cmd = options.buildCommandLine();
 		for (String s : cmd) {
 			System.out.print(s);
 			System.out.print(" ");
 		}
 		System.out.println();
-		try {
-			new ProcessBuilder().command(cmd)
-					.redirectError(Redirect.INHERIT)
-					.redirectOutput(Redirect.INHERIT)
-					.start().waitFor();
-		} catch (InterruptedException e) {
-			throw new RuntimeException(e);
-		}
+		exec(cmd.toArray(new String[0]));
 	}
 
 	private void watch() throws IOException, XMLStreamException, InterruptedException {

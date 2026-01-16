@@ -45,6 +45,8 @@ public class Model {
     private Map<String,String> properties = new HashMap<>();
     public int projectEndOffset = -1;
     public int dependenciesEndOffset = -1;
+    public int versionStartOffset = -1;
+    public int versionEndOffset = -1;
 
     public static Model read(Path pomFile) throws IOException, XMLStreamException {
         try (var in = Files.newBufferedReader(pomFile)) {
@@ -84,7 +86,9 @@ public class Model {
                     break;
                 }
                 case "version": {
+                    versionStartOffset = xml.getLocation().getCharacterOffset() - "version".length() - 2;
                     this.version = xml.getElementText();
+                    versionEndOffset = xml.getLocation().getCharacterOffset();
                     break;
                 }
                 case "description": {
