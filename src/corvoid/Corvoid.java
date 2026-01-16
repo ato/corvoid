@@ -808,40 +808,22 @@ public class Corvoid {
 	}
 
 	private void compile() throws XMLStreamException, IOException {
-		Model model = parseModel();
-		for (Corvoid module : workspace.sortedModules(model, projectRoot)) {
-			module.compile();
-		}
-		CompilerOptions options = buildCompilerOptions();
-		if (!Files.exists(options.srcDir) && options.resources.isEmpty()) {
-			return;
-		}
-		if (isChanged(options)) {
-			if (!Files.exists(options.outDir)) {
-				Files.createDirectories(options.outDir);
-			}
-			long start = System.currentTimeMillis();
-			System.out.format("Compiling \033[1;36m%s\033[0m... ", model.getArtifactId());
-			System.out.flush();
-			boolean success = compileViaToolApi(options);
-			copyResources(options);
-			Files.setLastModifiedTime(options.outDir, FileTime.from(Instant.now()));
-			long duration = System.currentTimeMillis() - start;
-			if (success) {
-				System.out.format("\033[1;32m✓\033[0m [%d ms]%n", duration);
-			} else {
-				System.out.format("\033[1;31m✗\033[0m [%d ms]%n", duration);
-				System.exit(1);
-			}
-		}
+		compile(buildCompilerOptions(), "");
 	}
 
 	private void compileTests() throws XMLStreamException, IOException {
+		compile(buildCompilerOptions(true), " tests");
+	}
+
+	private void compile(CompilerOptions options, String logSuffix) throws XMLStreamException, IOException {
 		Model model = parseModel();
 		for (Corvoid module : workspace.sortedModules(model, projectRoot)) {
-			module.compileTests();
+			if (logSuffix.isEmpty()) {
+				module.compile();
+			} else {
+				module.compileTests();
+			}
 		}
-		CompilerOptions options = buildCompilerOptions(true);
 		if (!Files.exists(options.srcDir) && options.resources.isEmpty()) {
 			return;
 		}
@@ -850,7 +832,7 @@ public class Corvoid {
 				Files.createDirectories(options.outDir);
 			}
 			long start = System.currentTimeMillis();
-			System.out.format("Compiling \033[1;36m%s\033[0m tests... ", model.getArtifactId());
+			System.out.format("Compiling \033[1;36m%s\033[0m%s... ", model.getArtifactId(), logSuffix);
 			System.out.flush();
 			boolean success = compileViaToolApi(options);
 			copyResources(options);
