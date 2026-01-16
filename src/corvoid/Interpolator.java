@@ -53,6 +53,8 @@ class Interpolator implements Transformer {
 		case "project.version":
 		case "pom.version":
 			return project.getVersion();
+		case "project.parent.version":
+			return project.getParent().getVersion();
 		case "project.build.directory":
 			return project.getBuild().getDirectory();
 		}

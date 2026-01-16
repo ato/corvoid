@@ -7,8 +7,7 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -112,5 +111,72 @@ public class Workspace {
 				scanModules(root.resolve(module));
 			}
 		}
+	}
+
+	public List<Corvoid> sortedModules(Model model, Path projectRoot) throws XMLStreamException, IOException {
+		List<String> modules = model.getModules();
+		if (modules.isEmpty()) {
+			return List.of();
+		}
+		scanModules(projectRoot);
+		Map<Coord, Corvoid> coordToCorvoid = new LinkedHashMap<>();
+		Map<Coord, Set<Coord>> dependencies = new HashMap<>();
+
+		for (String module : modules) {
+			Path modulePath = projectRoot.resolve(module);
+			Corvoid cv = new Corvoid(modulePath);
+			Model m = cv.parseModel();
+			String groupId = m.getGroupId();
+			if (groupId == null && m.getParent() != null) {
+				groupId = m.getParent().getGroupId();
+			}
+			if (groupId != null && m.getArtifactId() != null) {
+				Coord coord = new Coord(groupId, m.getArtifactId());
+				coordToCorvoid.put(coord, cv);
+				Set<Coord> deps = new HashSet<>();
+				for (corvoid.pom.Dependency d : m.getDependencies()) {
+					String dGroupId = d.getGroupId();
+					if (dGroupId == null && m.getParent() != null) {
+						dGroupId = m.getParent().getGroupId();
+					}
+					if (dGroupId != null && d.getArtifactId() != null) {
+						Coord dCoord = new Coord(dGroupId, d.getArtifactId());
+						if (isLocalModule(dCoord)) {
+							deps.add(dCoord);
+						}
+					}
+				}
+				dependencies.put(coord, deps);
+			}
+		}
+
+		List<Corvoid> sorted = new ArrayList<>();
+		Set<Coord> visited = new HashSet<>();
+		Set<Coord> visiting = new HashSet<>();
+
+		for (Coord coord : coordToCorvoid.keySet()) {
+			visit(coord, dependencies, visited, visiting, sorted, coordToCorvoid);
+		}
+		return sorted;
+	}
+
+	private void visit(Coord coord, Map<Coord, Set<Coord>> dependencies, Set<Coord> visited, Set<Coord> visiting,
+					   List<Corvoid> sorted, Map<Coord, Corvoid> coordToCorvoid) {
+		if (visited.contains(coord)) return;
+		if (visiting.contains(coord)) {
+			throw new RuntimeException("Circular dependency detected involving " + coord);
+		}
+		visiting.add(coord);
+		Set<Coord> deps = dependencies.get(coord);
+		if (deps != null) {
+			for (Coord dep : deps) {
+				if (coordToCorvoid.containsKey(dep)) {
+					visit(dep, dependencies, visited, visiting, sorted, coordToCorvoid);
+				}
+			}
+		}
+		visiting.remove(coord);
+		visited.add(coord);
+		sorted.add(coordToCorvoid.get(coord));
 	}
 }

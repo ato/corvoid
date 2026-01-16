@@ -348,7 +348,7 @@ public class Corvoid {
 		System.out.println("  watch      - watch for changes and recompile when seen");
 		System.exit(1);
 	}
-	
+
 	public void command(String[] args) throws XMLStreamException, IOException, InterruptedException {
 		if (args.length == 0)
 			usage();
@@ -536,8 +536,8 @@ public class Corvoid {
 
 	private void clean() throws IOException, XMLStreamException {
 		Model model = parseModel();
-		for (String module : model.getModules()) {
-			new Corvoid(projectRoot.resolve(module)).clean();
+		for (Corvoid module : workspace.sortedModules(model, projectRoot)) {
+			module.clean();
 		}
 		if (!Files.exists(target())) {
 			return;
@@ -643,8 +643,8 @@ public class Corvoid {
 
 	void jar() throws IOException, XMLStreamException {
 		Model model = parseModel();
-		for (String module : model.getModules()) {
-			new Corvoid(projectRoot.resolve(module)).jar();
+		for (Corvoid module : workspace.sortedModules(model, projectRoot)) {
+			module.jar();
 		}
 		Path outFile = target().resolve(model.getArtifactId() + "-" + model.getVersion() + ".jar");
 		ensureTargetExists();
@@ -809,8 +809,8 @@ public class Corvoid {
 
 	private void compile() throws XMLStreamException, IOException {
 		Model model = parseModel();
-		for (String module : model.getModules()) {
-			new Corvoid(projectRoot.resolve(module)).compile();
+		for (Corvoid module : workspace.sortedModules(model, projectRoot)) {
+			module.compile();
 		}
 		CompilerOptions options = buildCompilerOptions();
 		if (!Files.exists(options.srcDir) && options.resources.isEmpty()) {
@@ -838,8 +838,8 @@ public class Corvoid {
 
 	private void compileTests() throws XMLStreamException, IOException {
 		Model model = parseModel();
-		for (String module : model.getModules()) {
-			new Corvoid(projectRoot.resolve(module)).compileTests();
+		for (Corvoid module : workspace.sortedModules(model, projectRoot)) {
+			module.compileTests();
 		}
 		CompilerOptions options = buildCompilerOptions(true);
 		if (!Files.exists(options.srcDir) && options.resources.isEmpty()) {
@@ -900,8 +900,8 @@ public class Corvoid {
 
 	private void test(String[] args) throws XMLStreamException, IOException, InterruptedException {
 		Model model = parseModel();
-		for (String module : model.getModules()) {
-			new Corvoid(projectRoot.resolve(module)).test(args);
+		for (Corvoid module : workspace.sortedModules(model, projectRoot)) {
+			module.test(args);
 		}
 		CompilerOptions options = buildCompilerOptions(true);
 		if (!Files.exists(options.srcDir)) {
