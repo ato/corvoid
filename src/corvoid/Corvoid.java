@@ -400,7 +400,19 @@ public class Corvoid {
                 }
             }
 		}
-		tree().print(System.out, sort, showGroupId);
+		Model model = parseModel();
+		if (!model.getModules().isEmpty()) {
+			boolean first = true;
+			for (Corvoid module : workspace.sortedModules(model, projectRoot)) {
+				if (!first) {
+					System.out.println();
+				}
+				module.tree().print(System.out, sort, showGroupId);
+				first = false;
+			}
+		} else {
+			tree().print(System.out, sort, showGroupId);
+		}
 	}
 
 	@SuppressWarnings("unchecked")
