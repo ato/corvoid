@@ -1,9 +1,7 @@
 package corvoid.pom;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import javax.xml.stream.XMLStreamException;
 import javax.xml.stream.XMLStreamReader;
 import static javax.xml.stream.XMLStreamReader.START_ELEMENT;
@@ -17,7 +15,7 @@ public class Dependency {
     private String scope;
     private String systemPath;
     private List<Exclusion> exclusions = new ArrayList<>();
-    private Boolean optional;
+    private boolean optional;
 
     public int startOffset = -1;
     public int endOffset = -1;
@@ -96,7 +94,7 @@ public class Dependency {
         systemPath = dependency2.systemPath == null ? dependency1.systemPath : dependency2.systemPath;
         exclusions.addAll(dependency1.exclusions);
         exclusions.addAll(dependency2.exclusions);
-        optional = dependency2.optional == null ? dependency1.optional : dependency2.optional;
+        optional = dependency2.optional || dependency1.optional;
     }
 
     public void transform(Transformer transformer) {
@@ -145,7 +143,7 @@ public class Dependency {
         return exclusions;
     }
 
-    public Boolean getOptional() {
+    public boolean isOptional() {
         return optional;
     }
 

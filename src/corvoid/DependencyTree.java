@@ -189,6 +189,7 @@ public class DependencyTree {
 		while (!queue.isEmpty()) {
 			int levelSize = queue.size();
 			List<Node> currentLevelNodes = new ArrayList<>();
+			List<Node> allNewNodes = new ArrayList<>();
 
 			for (int i = 0; i < levelSize; i++) {
 				Node parent = queue.poll();
@@ -198,8 +199,9 @@ public class DependencyTree {
 					String scope = dep.getScope();
 					boolean scopeOk = scope == null || scope.equals("compile") || scope.equals("runtime")
 							|| (parent == root && scope.equals("test"));
-					if (!parent.exclusions.contains(coord) && scopeOk
-							&& (dep.getOptional() == null || !dep.getOptional())) {
+					boolean optionalOk = !dep.isOptional() || parent == root;
+					if (!parent.exclusions.contains(coord) && scopeOk && optionalOk) {
+						boolean isTransitiveOptional = parent != root && dep.isOptional();
 
 						String version = root.model.findManagedVersion(dep);
 						if (version == null) {
@@ -228,17 +230,21 @@ public class DependencyTree {
 								node.future = workspace.executor.submit(() -> {
 									Model m = workspace.resolveProject(coord, finalVersion);
 									finalNode.model = m;
+									finalNode.children = new ArrayList<>();
 									return m;
 								});
 								parent.children.add(node);
-								currentLevelNodes.add(node);
+								allNewNodes.add(node);
+								if (!isTransitiveOptional) {
+									currentLevelNodes.add(node);
+								}
 							}
 						}
 					}
 				}
 			}
 
-			for (Node node : currentLevelNodes) {
+			for (Node node : allNewNodes) {
 				try {
 					node.future.get();
 				} catch (InterruptedException | ExecutionException e) {
