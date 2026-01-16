@@ -534,7 +534,14 @@ public class Corvoid {
 		}
 	}
 
-	private void clean() throws IOException {
+	private void clean() throws IOException, XMLStreamException {
+		Model model = parseModel();
+		for (String module : model.getModules()) {
+			new Corvoid(projectRoot.resolve(module)).clean();
+		}
+		if (!Files.exists(target())) {
+			return;
+		}
 		Files.walkFileTree(target(), new SimpleFileVisitor<Path>() {
 			@Override
 			public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
@@ -636,6 +643,9 @@ public class Corvoid {
 
 	void jar() throws IOException, XMLStreamException {
 		Model model = parseModel();
+		for (String module : model.getModules()) {
+			new Corvoid(projectRoot.resolve(module)).jar();
+		}
 		Path outFile = target().resolve(model.getArtifactId() + "-" + model.getVersion() + ".jar");
 		ensureTargetExists();
 		try (JarWriter jar = new JarWriter(Files.newOutputStream(outFile))) {
@@ -731,17 +741,17 @@ public class Corvoid {
 		options.classpath = tree.classpath();
 		if (test) {
 			String srcDir = project.getBuild().getTestSourceDirectory();
-			options.srcDir = Path.of(srcDir != null ? srcDir : "test");
+			options.srcDir = projectRoot.resolve(srcDir != null ? srcDir : "test");
 			String outDir = project.getBuild().getTestOutputDirectory();
-			options.outDir = Path.of(outDir != null ? outDir : "target/test-classes");
+			options.outDir = projectRoot.resolve(outDir != null ? outDir : "target/test-classes");
 			String mainOutDir = project.getBuild().getOutputDirectory();
-			options.classpath = (mainOutDir != null ? mainOutDir : "target/classes") + ":" + options.classpath;
+			options.classpath = projectRoot.resolve(mainOutDir != null ? mainOutDir : "target/classes").toString() + ":" + options.classpath;
 			options.resources = project.getBuild().getTestResources();
 		} else {
 			String srcDir = project.getBuild().getSourceDirectory();
-			options.srcDir = Path.of(srcDir != null ? srcDir : "src");
+			options.srcDir = projectRoot.resolve(srcDir != null ? srcDir : "src");
 			String outDir = project.getBuild().getOutputDirectory();
-			options.outDir = Path.of(outDir != null ? outDir : "target/classes");
+			options.outDir = projectRoot.resolve(outDir != null ? outDir : "target/classes");
 			options.resources = project.getBuild().getResources();
 		}
 		return options;
@@ -787,7 +797,14 @@ public class Corvoid {
 	}
 
 	private void compile() throws XMLStreamException, IOException {
+		Model model = parseModel();
+		for (String module : model.getModules()) {
+			new Corvoid(projectRoot.resolve(module)).compile();
+		}
 		CompilerOptions options = buildCompilerOptions();
+		if (!Files.exists(options.srcDir) && options.resources.isEmpty()) {
+			return;
+		}
 		if (isChanged(options)) {
 			if (!Files.exists(options.outDir)) {
 				Files.createDirectories(options.outDir);
@@ -801,7 +818,14 @@ public class Corvoid {
 	}
 
 	private void compileTests() throws XMLStreamException, IOException {
+		Model model = parseModel();
+		for (String module : model.getModules()) {
+			new Corvoid(projectRoot.resolve(module)).compileTests();
+		}
 		CompilerOptions options = buildCompilerOptions(true);
+		if (!Files.exists(options.srcDir) && options.resources.isEmpty()) {
+			return;
+		}
 		if (isChanged(options)) {
 			if (!Files.exists(options.outDir)) {
 				Files.createDirectories(options.outDir);
@@ -848,9 +872,16 @@ public class Corvoid {
 	}
 
 	private void test(String[] args) throws XMLStreamException, IOException, InterruptedException {
+		Model model = parseModel();
+		for (String module : model.getModules()) {
+			new Corvoid(projectRoot.resolve(module)).test(args);
+		}
+		CompilerOptions options = buildCompilerOptions(true);
+		if (!Files.exists(options.srcDir)) {
+			return;
+		}
 		compile();
 		compileTests();
-		CompilerOptions options = buildCompilerOptions(true);
 		String classpath = options.outDir + ":" + options.classpath;
 		List<String> testClasses = findTestClasses(options.outDir);
 		if (testClasses.isEmpty()) {
