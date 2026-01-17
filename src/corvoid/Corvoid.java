@@ -420,14 +420,14 @@ public class Corvoid {
 	@SuppressWarnings("unchecked")
 	public void vulnerable() throws IOException, XMLStreamException {
 		DependencyTree tree = tree();
-		Set<String> purls = new HashSet<>();
-		collectPurls(tree.root(), purls);
-		if (purls.isEmpty()) {
+		Map<String, DependencyTree.Node> nodes = new LinkedHashMap<>();
+		collectNodes(tree.root(), nodes);
+		if (nodes.isEmpty()) {
 			return;
 		}
 
 		List<Map<String, Object>> queries = new ArrayList<>();
-		for (String purl : purls) {
+		for (String purl : nodes.keySet()) {
 			queries.add(Map.of("package", Map.of("purl", purl)));
 		}
 
@@ -447,13 +447,18 @@ public class Corvoid {
 			try (InputStream in = response.body()) {
 				Map<String, Object> results = (Map<String, Object>) Json.read(in);
 				List<Map<String, Object>> resultsList = (List<Map<String, Object>>) results.get("results");
-				List<String> purlsList = new ArrayList<>(purls);
+				List<String> purlsList = new ArrayList<>(nodes.keySet());
 				for (int i = 0; i < resultsList.size(); i++) {
 					Map<String, Object> result = resultsList.get(i);
 					List<Map<String, Object>> vulns = (List<Map<String, Object>>) result.get("vulns");
 					if (vulns != null && !vulns.isEmpty()) {
 						String purl = purlsList.get(i);
-						System.out.println("\033[1;31mVulnerabilities in " + purl + ":\033[0m");
+						DependencyTree.Node node = nodes.get(purl);
+						if (node.coord().groupId.equals(node.coord().artifactId)) {
+							System.out.printf("\033[1;36m%s\033[0m \033[1;33m%s\033[0m%n", node.coord().artifactId, node.version());
+						} else {
+							System.out.printf("\033[90m%s:\033[1;36m%s\033[0m \033[1;33m%s\033[0m%n", node.coord().groupId, node.coord().artifactId, node.version());
+						}
 						for (Map<String, Object> vuln : vulns) {
 							System.out.println("  - " + vuln.get("id") + " (modified: " + vuln.get("modified") + ")");
 						}
@@ -466,12 +471,13 @@ public class Corvoid {
 		}
 	}
 
-	private void collectPurls(DependencyTree.Node node, Set<String> purls) {
+	private void collectNodes(DependencyTree.Node node, Map<String, DependencyTree.Node> nodes) {
 		if (node.coord() != null && node.version() != null) {
-			purls.add("pkg:maven/" + node.coord().groupId + "/" + node.coord().artifactId + "@" + node.version());
+			String purl = "pkg:maven/" + node.coord().groupId + "/" + node.coord().artifactId + "@" + node.version();
+			nodes.putIfAbsent(purl, node);
 		}
 		for (DependencyTree.Node child : node.children()) {
-			collectPurls(child, purls);
+			collectNodes(child, nodes);
 		}
 	}
 
