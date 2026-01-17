@@ -343,6 +343,7 @@ public class Corvoid {
 		System.out.println("  tag        - create a git tag and bump the version");
 		System.out.println("  test       - run unit tests");
 		System.out.println("  tree [-s]  - print a dependency tree");
+		System.out.println("  vulnerable - check for vulnerabilities using osv.dev");
 		System.out.println("  uberjar    - build a standalone jar file");
 		System.out.println("  update     - update dependencies to latest stable versions");
 		System.out.println("  watch      - watch for changes and recompile when seen");
@@ -368,6 +369,7 @@ public class Corvoid {
 			case "search": search(args[1]); break;
 			case "tag": tag(); break;
 			case "tree": printTree(args); break;
+			case "vulnerable": vulnerable(); break;
 			case "compile": compile(); break;
 			case "test": test(args); break;
 			case "run": run(args); break;
@@ -412,6 +414,64 @@ public class Corvoid {
 			}
 		} else {
 			tree().print(System.out, sort, showGroupId);
+		}
+	}
+
+	@SuppressWarnings("unchecked")
+	public void vulnerable() throws IOException, XMLStreamException {
+		DependencyTree tree = tree();
+		Set<String> purls = new HashSet<>();
+		collectPurls(tree.root(), purls);
+		if (purls.isEmpty()) {
+			return;
+		}
+
+		List<Map<String, Object>> queries = new ArrayList<>();
+		for (String purl : purls) {
+			queries.add(Map.of("package", Map.of("purl", purl)));
+		}
+
+		HttpClient client = HttpClient.newHttpClient();
+		ByteArrayOutputStream out = new ByteArrayOutputStream();
+		Json.write(out, Map.of("queries", queries));
+		HttpRequest request = HttpRequest.newBuilder()
+				.uri(URI.create("https://api.osv.dev/v1/querybatch"))
+				.header("Content-Type", "application/json")
+				.POST(HttpRequest.BodyPublishers.ofByteArray(out.toByteArray()))
+				.build();
+		try {
+			HttpResponse<InputStream> response = client.send(request, HttpResponse.BodyHandlers.ofInputStream());
+			if (response.statusCode() != 200) {
+				throw new IOException("Unexpected status code: " + response.statusCode());
+			}
+			try (InputStream in = response.body()) {
+				Map<String, Object> results = (Map<String, Object>) Json.read(in);
+				List<Map<String, Object>> resultsList = (List<Map<String, Object>>) results.get("results");
+				List<String> purlsList = new ArrayList<>(purls);
+				for (int i = 0; i < resultsList.size(); i++) {
+					Map<String, Object> result = resultsList.get(i);
+					List<Map<String, Object>> vulns = (List<Map<String, Object>>) result.get("vulns");
+					if (vulns != null && !vulns.isEmpty()) {
+						String purl = purlsList.get(i);
+						System.out.println("\033[1;31mVulnerabilities in " + purl + ":\033[0m");
+						for (Map<String, Object> vuln : vulns) {
+							System.out.println("  - " + vuln.get("id") + " (modified: " + vuln.get("modified") + ")");
+						}
+					}
+				}
+			}
+		} catch (InterruptedException e) {
+			Thread.currentThread().interrupt();
+			throw new IOException(e);
+		}
+	}
+
+	private void collectPurls(DependencyTree.Node node, Set<String> purls) {
+		if (node.coord() != null && node.version() != null) {
+			purls.add("pkg:maven/" + node.coord().groupId + "/" + node.coord().artifactId + "@" + node.version());
+		}
+		for (DependencyTree.Node child : node.children()) {
+			collectPurls(child, purls);
 		}
 	}
 
